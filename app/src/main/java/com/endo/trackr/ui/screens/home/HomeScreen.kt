@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -71,6 +72,7 @@ import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
 import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
+import com.endo.trackr.ui.components.OsmMapView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,7 +124,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 3: Adaptive Polling & Idle Detection",
+                            text = "Modul 4: OSM Map View & Route Polyline",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -152,8 +154,29 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // 1. Kanvas Peta OpenStreetMap Interaktif
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        )
+                    ) {
+                        OsmMapView(
+                            modifier = Modifier.fillMaxSize(),
+                            points = uiState.activePoints,
+                            latestPoint = uiState.latestPoint,
+                            isTrackingActive = uiState.isServiceRunning && !uiState.isServicePaused
+                        )
+                    }
+                }
+
+                // 2. Kartu Kontrol & Metrik Pelacakan
+                item {
                     TrackingControlCard(
                         isServiceRunning = uiState.isServiceRunning,
                         isServicePaused = uiState.isServicePaused,
@@ -177,6 +200,7 @@ fun HomeScreen(
                     )
                 }
 
+                // 3. Riwayat Sesi
                 item {
                     Text(
                         text = "Riwayat Sesi Tersimpan (${uiState.sessions.size})",
@@ -194,7 +218,7 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.surfaceContainerLow
                         ) {
                             Text(
-                                text = "Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute.",
+                                text = "Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute di atas peta.",
                                 modifier = Modifier.padding(20.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.outline
@@ -417,7 +441,7 @@ private fun TrackingControlCard(
                         }
                     }
 
-                    // Baris Tombol Uji Coba Pengujian Fitur Modul 3
+                    // Baris Tombol Uji Coba Pengujian Fitur
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -427,7 +451,7 @@ private fun TrackingControlCard(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = if (motionState == MotionState.MOVING) "Simulasi Diam (Idle)" else "Simulasi Bergerak",
+                                text = if (motionState == MotionState.MOVING) "Simulasi Diam" else "Simulasi Bergerak",
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
@@ -449,7 +473,7 @@ private fun TrackingControlCard(
             // Tombol Aksi Kontrol
             if (!isServiceRunning) {
                 Text(
-                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service. Interval beradaptasi otomatis (5s saat jalan, 60s saat diam di meja).",
+                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service dan menggambar polyline rute di atas peta.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
