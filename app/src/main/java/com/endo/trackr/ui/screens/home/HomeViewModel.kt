@@ -8,6 +8,7 @@ import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.repository.LocationRepository
 import com.endo.trackr.service.LocationTrackingService
+import com.endo.trackr.service.motion.MotionState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,11 +29,14 @@ data class HomeUiState(
     val totalPointCount: Int = 0,
     val isServiceRunning: Boolean = false,
     val isServicePaused: Boolean = false,
+    val motionState: MotionState = MotionState.MOVING,
+    val jitterCount: Int = 0,
     val isLoading: Boolean = false
 )
 
 /**
- * ViewModel untuk Dashboard utama dan pengontrol Foreground Service pelacakan.
+ * ViewModel untuk Dashboard utama, pengontrol Foreground Service,
+ * status gerak Adaptive Polling, dan GPS Jitter Filtering.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -51,20 +55,28 @@ class HomeViewModel(
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
-        activeSessionFlow,
-        allSessionsFlow,
-        activePointsFlow,
-        LocationTrackingService.isTrackingRunning,
-        LocationTrackingService.isTrackingPaused
-    ) { activeSession, sessions, activePoints, isRunning, isPaused ->
+        combine(activeSessionFlow, allSessionsFlow, activePointsFlow) { activeSession, sessions, activePoints ->
+            Triple(activeSession, sessions, activePoints)
+        },
+        combine(
+            LocationTrackingService.isTrackingRunning,
+            LocationTrackingService.isTrackingPaused,
+            LocationTrackingService.currentMotionState,
+            LocationTrackingService.jitterCount
+        ) { isRunning, isPaused, motionState, jitterCount ->
+            Quad(isRunning, isPaused, motionState, jitterCount)
+        }
+    ) { (activeSession, sessions, activePoints), (isRunning, isPaused, motionState, jitterCount) ->
         HomeUiState(
             activeSession = activeSession,
             sessions = sessions,
             activePoints = activePoints,
             latestPoint = activePoints.lastOrNull(),
-            totalPointCount = activePoints.size,
+            totalPointCount = activePoints.count { !it.isJitter },
             isServiceRunning = isRunning,
             isServicePaused = isPaused,
+            motionState = motionState,
+            jitterCount = jitterCount,
             isLoading = false
         )
     }.stateIn(
@@ -73,9 +85,6 @@ class HomeViewModel(
         initialValue = HomeUiState(isLoading = true)
     )
 
-    /**
-     * Memulai Foreground Location Service dan menghubungkan ke Room Database.
-     */
     fun startTracking(context: Context, customTitle: String? = null) {
         viewModelScope.launch {
             val existingActive = locationRepository.getActiveSessionSync()
@@ -108,30 +117,45 @@ class HomeViewModel(
     }
 
     /**
-     * Helper simulasi titik koordinat jika pengguna mengetes tanpa berpindah tempat secara fisik.
+     * Beralih secara manual antara status BERGERAK dan DIAM (STATIONARY)
+     * untuk memverifikasi adaptive polling interval di Android Studio Emulator.
      */
-    fun insertTestLocationPoint(
-        latitude: Double,
-        longitude: Double,
-        accuracy: Float = 5.0f,
-        speed: Float = 1.4f
-    ) {
+    fun toggleSimulatedMotionState(context: Context) {
+        val nextState = if (uiState.value.motionState == MotionState.MOVING) {
+            MotionState.STATIONARY
+        } else {
+            MotionState.MOVING
+        }
+        LocationTrackingService.setSimulatedMotionState(context, nextState)
+    }
+
+    /**
+     * Memasukkan titik loncatan sinyal liar (akurasi buruk 65m) untuk menguji
+     * penolakan filter jitter GPS secara visual.
+     */
+    fun insertSimulatedJitterPoint() {
         val currentSession = uiState.value.activeSession ?: return
         viewModelScope.launch {
-            val point = LocationPointEntity(
+            val jitterPoint = LocationPointEntity(
                 sessionId = currentSession.id,
-                latitude = latitude,
-                longitude = longitude,
-                accuracy = accuracy,
-                speed = speed,
-                timestamp = System.currentTimeMillis()
+                latitude = -6.175392 + 0.05, // Loncatan ekstrem ~5.5 km
+                longitude = 106.827153 + 0.05,
+                accuracy = 65.0f, // Akurasi buruk > 30m
+                speed = 80.0f,
+                timestamp = System.currentTimeMillis(),
+                isJitter = true
             )
-            locationRepository.insertLocationPoint(point)
-
-            val updatedPointCount = currentSession.pointCount + 1
-            locationRepository.updateSession(
-                currentSession.copy(pointCount = updatedPointCount)
-            )
+            locationRepository.insertLocationPoint(jitterPoint)
         }
     }
 }
+
+/**
+ * Data holder helper untuk de-structuring 4 elemen.
+ */
+private data class Quad<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+)
