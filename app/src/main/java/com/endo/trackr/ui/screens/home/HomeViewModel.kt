@@ -7,8 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
+import com.endo.trackr.core.util.StatsCalculator
+import com.endo.trackr.core.util.StatsTimeRange
 import com.endo.trackr.core.util.StayPointDetector
 import com.endo.trackr.core.util.TimelineSegment
+import com.endo.trackr.core.util.TravelStatsSummary
 import com.endo.trackr.data.exporter.DataExporter
 import com.endo.trackr.data.exporter.ExportFormat
 import com.endo.trackr.data.local.entity.LocationPointEntity
@@ -56,13 +59,18 @@ data class HomeUiState(
     val resolvingStayPointIds: Set<Long> = emptySet(),
     val isBatchGeocoding: Boolean = false,
     val exportDialogState: ExportDialogState = ExportDialogState(),
+    val selectedStatsRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
+    val statsSummary: TravelStatsSummary = TravelStatsSummary(),
+    val statsPoints: List<LocationPointEntity> = emptyList(),
+    val statsStayPoints: List<StayPointEntity> = emptyList(),
+    val showStatsHeatmap: Boolean = true,
     val isLoading: Boolean = false
 )
 
 /**
  * ViewModel untuk Dashboard utama, pengontrol Foreground Service,
  * visualisasi peta, Smart Stay-Point Clustering Timeline, On-Demand Reverse Geocoding,
- * dan Ekspor Data GIS (GPX / KML / GeoJSON).
+ * Ekspor Data GIS, dan Analitik Heatmap & Statistik Jarak (Haversine).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -89,9 +97,14 @@ class HomeViewModel(
         }
     }
 
+    private val allValidPointsFlow = locationRepository.getAllValidPoints()
+    private val allStayPointsFlow = locationRepository.getAllStayPoints()
+
     private val _resolvingStayPointIds = MutableStateFlow<Set<Long>>(emptySet())
     private val _isBatchGeocoding = MutableStateFlow(false)
     private val _exportDialogState = MutableStateFlow(ExportDialogState())
+    private val _selectedStatsRange = MutableStateFlow(StatsTimeRange.ALL_TIME)
+    private val _showStatsHeatmap = MutableStateFlow(true)
 
     val uiState: StateFlow<HomeUiState> = combine(
         combine(activeSessionFlow, allSessionsFlow, activePointsFlow, stayPointsFlow) { activeSession, sessions, activePoints, stayPoints ->
@@ -107,9 +120,23 @@ class HomeViewModel(
         },
         combine(_resolvingStayPointIds, _isBatchGeocoding, _exportDialogState) { resolvingIds, isBatch, exportState ->
             Triple(resolvingIds, isBatch, exportState)
+        },
+        combine(allValidPointsFlow, allStayPointsFlow, _selectedStatsRange, _showStatsHeatmap) { allValid, allStay, statsRange, showHeatmap ->
+            Quad(allValid, allStay, statsRange, showHeatmap)
         }
-    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState) ->
+    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState), (allValid, allStay, statsRange, showHeatmap) ->
         val segments = StayPointDetector.buildTimelineSegments(activePoints, stayPoints)
+
+        val statsThreshold = StatsCalculator.getStartTimestampForRange(statsRange)
+        val filteredStatsPoints = allValid.filter { it.timestamp >= statsThreshold }
+        val filteredStatsStayPoints = allStay.filter { it.arrivalTime >= statsThreshold }
+
+        val statsSummary = StatsCalculator.calculate(
+            range = statsRange,
+            sessions = sessions,
+            points = allValid,
+            stayPoints = allStay
+        )
 
         HomeUiState(
             activeSession = activeSession,
@@ -126,6 +153,11 @@ class HomeViewModel(
             resolvingStayPointIds = resolvingIds,
             isBatchGeocoding = isBatch,
             exportDialogState = exportState,
+            selectedStatsRange = statsRange,
+            statsSummary = statsSummary,
+            statsPoints = filteredStatsPoints,
+            statsStayPoints = filteredStatsStayPoints,
+            showStatsHeatmap = showHeatmap,
             isLoading = false
         )
     }.stateIn(
@@ -291,6 +323,18 @@ class HomeViewModel(
         val content = generateExportContent()
         val format = _exportDialogState.value.selectedFormat
         return DataExporter.createShareIntent(context, filename, content, format)
+    }
+
+    // ==========================================
+    // METODE OPERASI STATISTIK & HEATMAP (MODUL 8)
+    // ==========================================
+
+    fun setSelectedStatsRange(range: StatsTimeRange) {
+        _selectedStatsRange.value = range
+    }
+
+    fun toggleStatsHeatmap() {
+        _showStatsHeatmap.value = !_showStatsHeatmap.value
     }
 
     /**

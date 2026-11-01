@@ -31,6 +31,7 @@ interface LocationRepository {
     fun getPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>>
     suspend fun getPointsForSessionSync(sessionId: Long): List<LocationPointEntity>
     fun getValidPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>>
+    fun getAllValidPoints(): Flow<List<LocationPointEntity>>
     fun getLatestPoint(sessionId: Long): Flow<LocationPointEntity?>
     suspend fun getLatestPointSync(sessionId: Long): LocationPointEntity?
     fun getPointCountForSession(sessionId: Long): Flow<Int>
@@ -38,6 +39,7 @@ interface LocationRepository {
     // --- Manajemen Titik Singgah (Stay-Point Clustering) ---
     fun getStayPointsForSession(sessionId: Long): Flow<List<StayPointEntity>>
     suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity>
+    fun getAllStayPoints(): Flow<List<StayPointEntity>>
     suspend fun insertStayPoints(stayPoints: List<StayPointEntity>)
     suspend fun updateStayPointAddress(stayPointId: Long, address: String)
     suspend fun recalculateStayPoints(

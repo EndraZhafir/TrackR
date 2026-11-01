@@ -25,6 +25,9 @@ interface StayPointDao {
     @Query("SELECT * FROM stay_points WHERE sessionId = :sessionId ORDER BY arrivalTime ASC")
     suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity>
 
+    @Query("SELECT * FROM stay_points ORDER BY arrivalTime DESC")
+    fun getAllStayPoints(): Flow<List<StayPointEntity>>
+
     @Query("DELETE FROM stay_points WHERE sessionId = :sessionId")
     suspend fun deleteStayPointsForSession(sessionId: Long)
 

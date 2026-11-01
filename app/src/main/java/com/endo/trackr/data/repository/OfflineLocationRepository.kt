@@ -11,8 +11,7 @@ import com.endo.trackr.data.local.entity.TrackingStatus
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Implementasi offline-first dari [LocationRepository] yang langsung berkomunikasi
- * dengan basis data lokal Room via [TrackingSessionDao], [LocationPointDao], dan [StayPointDao].
+ * Implementasi offline-first dari [LocationRepository] menggunakan Room SQLite DAOs.
  */
 class OfflineLocationRepository(
     private val sessionDao: TrackingSessionDao,
@@ -36,9 +35,11 @@ class OfflineLocationRepository(
         sessionDao.getActiveSessionSync()
 
     override suspend fun startNewSession(title: String?): Long {
+        val now = System.currentTimeMillis()
+        val sessionName = title ?: "Jejak Perjalanan"
         val newSession = TrackingSessionEntity(
-            startTime = System.currentTimeMillis(),
-            title = title,
+            title = sessionName,
+            startTime = now,
             status = TrackingStatus.ACTIVE.name
         )
         return sessionDao.insertSession(newSession)
@@ -61,19 +62,19 @@ class OfflineLocationRepository(
     override suspend fun completeSession(sessionId: Long) {
         val session = sessionDao.getSessionByIdSync(sessionId) ?: return
         val now = System.currentTimeMillis()
-        val durationSeconds = ((now - session.startTime) / 1000).coerceAtLeast(0)
+        val duration = (now - session.startTime) / 1000
         sessionDao.updateSession(
             session.copy(
                 endTime = now,
-                totalDurationSeconds = durationSeconds,
+                totalDurationSeconds = duration,
                 status = TrackingStatus.COMPLETED.name
             )
         )
-        // Hitung dan simpan stay points otomatis saat sesi selesai
-        recalculateStayPoints(sessionId)
     }
 
     override suspend fun deleteSession(sessionId: Long) {
+        pointDao.deletePointsForSession(sessionId)
+        stayPointDao.deleteStayPointsForSession(sessionId)
         sessionDao.deleteSessionById(sessionId)
     }
 
@@ -94,6 +95,9 @@ class OfflineLocationRepository(
     override fun getValidPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>> =
         pointDao.getValidPointsForSession(sessionId)
 
+    override fun getAllValidPoints(): Flow<List<LocationPointEntity>> =
+        pointDao.getAllValidPoints()
+
     override fun getLatestPoint(sessionId: Long): Flow<LocationPointEntity?> =
         pointDao.getLatestPointForSession(sessionId)
 
@@ -108,6 +112,9 @@ class OfflineLocationRepository(
 
     override suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity> =
         stayPointDao.getStayPointsForSessionSync(sessionId)
+
+    override fun getAllStayPoints(): Flow<List<StayPointEntity>> =
+        stayPointDao.getAllStayPoints()
 
     override suspend fun insertStayPoints(stayPoints: List<StayPointEntity>) {
         stayPointDao.insertStayPoints(stayPoints)

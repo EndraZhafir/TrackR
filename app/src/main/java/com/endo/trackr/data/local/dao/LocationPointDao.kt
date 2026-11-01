@@ -28,6 +28,9 @@ interface LocationPointDao {
     @Query("SELECT * FROM location_points WHERE sessionId = :sessionId AND isJitter = 0 ORDER BY timestamp ASC")
     fun getValidPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>>
 
+    @Query("SELECT * FROM location_points WHERE isJitter = 0 ORDER BY timestamp ASC")
+    fun getAllValidPoints(): Flow<List<LocationPointEntity>>
+
     @Query("SELECT * FROM location_points WHERE sessionId = :sessionId ORDER BY timestamp DESC LIMIT 1")
     fun getLatestPointForSession(sessionId: Long): Flow<LocationPointEntity?>
 
