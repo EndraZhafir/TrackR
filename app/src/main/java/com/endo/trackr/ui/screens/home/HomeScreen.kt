@@ -2,7 +2,9 @@ package com.endo.trackr.ui.screens.home
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
@@ -82,6 +85,7 @@ import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
 import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
+import com.endo.trackr.ui.components.ExportDialog
 import com.endo.trackr.ui.components.OsmMapView
 import com.endo.trackr.ui.components.TimelineSegmentItem
 
@@ -125,6 +129,21 @@ fun HomeScreen(
         }
     }
 
+    // Launcher untuk Storage Access Framework (SAF) - Simpan Berkas Ekspor GIS
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val success = viewModel.saveExportToUri(context, uri)
+            if (success) {
+                Toast.makeText(context, "Berkas berhasil diekspor dan disimpan!", Toast.LENGTH_SHORT).show()
+                viewModel.closeExportDialog()
+            } else {
+                Toast.makeText(context, "Gagal menyimpan berkas ke penyimpanan.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -136,9 +155,25 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 6: On-Demand Reverse Geocoding",
+                            text = "Modul 7: Export GPX / KML / GeoJSON",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            if (uiState.activePoints.isEmpty()) {
+                                Toast.makeText(context, "Belum ada titik jejak untuk diekspor", Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewModel.openExportDialog()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "Ekspor Riwayat Jejak"
                         )
                     }
                 },
@@ -305,6 +340,9 @@ fun HomeScreen(
                                 },
                                 onResolveAllAddresses = {
                                     viewModel.resolveAllUnresolvedStayPoints()
+                                },
+                                onExportClick = {
+                                    viewModel.openExportDialog()
                                 }
                             )
                         }
@@ -369,6 +407,35 @@ fun HomeScreen(
             }
         }
     }
+
+    // Modal Dialog Ekspor Data GIS (GPX / KML / GeoJSON)
+    if (uiState.exportDialogState.isVisible) {
+        ExportDialog(
+            sessionTitle = uiState.activeSession?.title ?: "Jejak TrackR",
+            totalPoints = uiState.totalPointCount,
+            stayPointsCount = uiState.stayPoints.size,
+            selectedFormat = uiState.exportDialogState.selectedFormat,
+            includeStayPoints = uiState.exportDialogState.includeStayPoints,
+            filterJitter = uiState.exportDialogState.filterJitter,
+            suggestedFilename = viewModel.getExportFilename(),
+            onFormatSelected = { viewModel.setExportFormat(it) },
+            onIncludeStayPointsChanged = { viewModel.setExportIncludeStayPoints(it) },
+            onFilterJitterChanged = { viewModel.setExportFilterJitter(it) },
+            onSaveToFileClick = {
+                createDocumentLauncher.launch(viewModel.getExportFilename())
+            },
+            onShareClick = {
+                val shareIntent = viewModel.shareExport(context)
+                if (shareIntent != null) {
+                    context.startActivity(Intent.createChooser(shareIntent, "Bagikan Berkas Jejak TrackR"))
+                    viewModel.closeExportDialog()
+                } else {
+                    Toast.makeText(context, "Gagal menyiapkan berkas ekspor untuk dibagikan", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismissRequest = { viewModel.closeExportDialog() }
+        )
+    }
 }
 
 @Composable
@@ -379,7 +446,8 @@ private fun TimelineHeaderCard(
     isBatchGeocoding: Boolean,
     onGenerateDemo: () -> Unit,
     onRecluster: () -> Unit,
-    onResolveAllAddresses: () -> Unit
+    onResolveAllAddresses: () -> Unit,
+    onExportClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -453,6 +521,19 @@ private fun TimelineHeaderCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Terjemahkan Semua Alamat ($unresolvedCount)")
                     }
+                }
+            }
+
+            // Tombol Pintas Ekspor Riwayat Jejak GIS
+            if (totalPointCount > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onExportClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Ekspor Jejak GIS (GPX / KML / GeoJSON)")
                 }
             }
         }

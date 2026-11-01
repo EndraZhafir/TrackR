@@ -1,12 +1,16 @@
 package com.endo.trackr.ui.screens.home
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.core.util.StayPointDetector
 import com.endo.trackr.core.util.TimelineSegment
+import com.endo.trackr.data.exporter.DataExporter
+import com.endo.trackr.data.exporter.ExportFormat
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
@@ -25,6 +29,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
+ * State dialog ekspor data GIS.
+ */
+data class ExportDialogState(
+    val isVisible: Boolean = false,
+    val selectedFormat: ExportFormat = ExportFormat.GPX,
+    val includeStayPoints: Boolean = true,
+    val filterJitter: Boolean = true
+)
+
+/**
  * State UI untuk layar utama TrackR.
  */
 data class HomeUiState(
@@ -41,12 +55,14 @@ data class HomeUiState(
     val jitterCount: Int = 0,
     val resolvingStayPointIds: Set<Long> = emptySet(),
     val isBatchGeocoding: Boolean = false,
+    val exportDialogState: ExportDialogState = ExportDialogState(),
     val isLoading: Boolean = false
 )
 
 /**
  * ViewModel untuk Dashboard utama, pengontrol Foreground Service,
- * visualisasi peta, Smart Stay-Point Clustering Timeline, dan On-Demand Reverse Geocoding.
+ * visualisasi peta, Smart Stay-Point Clustering Timeline, On-Demand Reverse Geocoding,
+ * dan Ekspor Data GIS (GPX / KML / GeoJSON).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -75,6 +91,7 @@ class HomeViewModel(
 
     private val _resolvingStayPointIds = MutableStateFlow<Set<Long>>(emptySet())
     private val _isBatchGeocoding = MutableStateFlow(false)
+    private val _exportDialogState = MutableStateFlow(ExportDialogState())
 
     val uiState: StateFlow<HomeUiState> = combine(
         combine(activeSessionFlow, allSessionsFlow, activePointsFlow, stayPointsFlow) { activeSession, sessions, activePoints, stayPoints ->
@@ -88,10 +105,10 @@ class HomeViewModel(
         ) { isRunning, isPaused, motionState, jitterCount ->
             Quad(isRunning, isPaused, motionState, jitterCount)
         },
-        combine(_resolvingStayPointIds, _isBatchGeocoding) { resolvingIds, isBatch ->
-            resolvingIds to isBatch
+        combine(_resolvingStayPointIds, _isBatchGeocoding, _exportDialogState) { resolvingIds, isBatch, exportState ->
+            Triple(resolvingIds, isBatch, exportState)
         }
-    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch) ->
+    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState) ->
         val segments = StayPointDetector.buildTimelineSegments(activePoints, stayPoints)
 
         HomeUiState(
@@ -108,6 +125,7 @@ class HomeViewModel(
             jitterCount = jitterCount,
             resolvingStayPointIds = resolvingIds,
             isBatchGeocoding = isBatch,
+            exportDialogState = exportState,
             isLoading = false
         )
     }.stateIn(
@@ -218,6 +236,63 @@ class HomeViewModel(
         }
     }
 
+    // ==========================================
+    // METODE OPERASI EKSPOR DATA GIS (MODUL 7)
+    // ==========================================
+
+    fun openExportDialog() {
+        _exportDialogState.value = _exportDialogState.value.copy(isVisible = true)
+    }
+
+    fun closeExportDialog() {
+        _exportDialogState.value = _exportDialogState.value.copy(isVisible = false)
+    }
+
+    fun setExportFormat(format: ExportFormat) {
+        _exportDialogState.value = _exportDialogState.value.copy(selectedFormat = format)
+    }
+
+    fun setExportIncludeStayPoints(include: Boolean) {
+        _exportDialogState.value = _exportDialogState.value.copy(includeStayPoints = include)
+    }
+
+    fun setExportFilterJitter(filter: Boolean) {
+        _exportDialogState.value = _exportDialogState.value.copy(filterJitter = filter)
+    }
+
+    fun getExportFilename(): String {
+        val currentSessionTitle = uiState.value.activeSession?.title ?: "Jejak"
+        val format = _exportDialogState.value.selectedFormat
+        return DataExporter.generateFilename(currentSessionTitle, format)
+    }
+
+    fun generateExportContent(): String {
+        val currentSession = uiState.value.activeSession
+        val sessionTitle = currentSession?.title ?: "Jejak TrackR"
+        val state = _exportDialogState.value
+
+        return DataExporter.generateDocument(
+            format = state.selectedFormat,
+            sessionTitle = sessionTitle,
+            points = uiState.value.activePoints,
+            stayPoints = uiState.value.stayPoints,
+            includeStayPoints = state.includeStayPoints,
+            filterJitter = state.filterJitter
+        )
+    }
+
+    fun saveExportToUri(context: Context, destinationUri: Uri): Boolean {
+        val content = generateExportContent()
+        return DataExporter.writeContentToUri(context, destinationUri, content)
+    }
+
+    fun shareExport(context: Context): Intent? {
+        val filename = getExportFilename()
+        val content = generateExportContent()
+        val format = _exportDialogState.value.selectedFormat
+        return DataExporter.createShareIntent(context, filename, content, format)
+    }
+
     /**
      * Menghasilkan data sesi simulasi harian realistis:
      * - Titik Singgah 1 (Monas): Singgah 25 menit (30 titik cluster)
@@ -248,20 +323,20 @@ class HomeViewModel(
                 timeCursor += 60 * 1000L
             }
 
-            // 2. Perjalanan Bergerak Monas -> Bundaran HI (~2.8 km) - 20 menit
-            val hiLat = -6.195000
-            val hiLng = 106.823000
-            val steps = 20
-            for (step in 1..steps) {
-                val ratio = step.toDouble() / steps
-                val currentLat = monasLat + (hiLat - monasLat) * ratio
-                val currentLng = monasLng + (hiLng - monasLng) * ratio
+            // 2. Perjalanan Bergerak dari Monas ke Bundaran HI (~2.8 km, ~20 menit)
+            val hiLat = -6.195150
+            val hiLng = 106.823050
+            val moveSteps = 20
+            for (i in 1..moveSteps) {
+                val fraction = i.toDouble() / moveSteps
+                val lat = monasLat + fraction * (hiLat - monasLat) + (Math.random() - 0.5) * 0.00005
+                val lng = monasLng + fraction * (hiLng - monasLng) + (Math.random() - 0.5) * 0.00005
                 points.add(
                     LocationPointEntity(
                         sessionId = sessionId,
-                        latitude = currentLat,
-                        longitude = currentLng,
-                        accuracy = 5.0f,
+                        latitude = lat,
+                        longitude = lng,
+                        accuracy = 6.0f,
                         speed = 8.5f,
                         timestamp = timeCursor
                     )
@@ -269,14 +344,14 @@ class HomeViewModel(
                 timeCursor += 60 * 1000L
             }
 
-            // 3. Cluster Singgah #2 (Bundaran HI) - 35 menit
+            // 3. Cluster Singgah #2 (Bundaran HI): Singgah 35 menit
             for (i in 0 until 35) {
                 points.add(
                     LocationPointEntity(
                         sessionId = sessionId,
-                        latitude = hiLat + (Math.random() - 0.5) * 0.00012,
-                        longitude = hiLng + (Math.random() - 0.5) * 0.00012,
-                        accuracy = 4.5f,
+                        latitude = hiLat + (Math.random() - 0.5) * 0.0001,
+                        longitude = hiLng + (Math.random() - 0.5) * 0.0001,
+                        accuracy = 5.0f,
                         speed = 0.1f,
                         timestamp = timeCursor
                     )
