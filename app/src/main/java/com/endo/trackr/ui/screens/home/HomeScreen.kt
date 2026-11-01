@@ -25,11 +25,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
@@ -66,6 +69,7 @@ import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
+import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,7 +122,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 2: Foreground Location Service",
+                            text = "Modul 3: Adaptive Polling & Idle Detection",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -153,6 +157,8 @@ fun HomeScreen(
                     TrackingControlCard(
                         isServiceRunning = uiState.isServiceRunning,
                         isServicePaused = uiState.isServicePaused,
+                        motionState = uiState.motionState,
+                        jitterCount = uiState.jitterCount,
                         activeSession = uiState.activeSession,
                         latestPoint = uiState.latestPoint,
                         pointCount = uiState.totalPointCount,
@@ -165,7 +171,9 @@ fun HomeScreen(
                         },
                         onPauseClick = { viewModel.pauseTracking(context) },
                         onResumeClick = { viewModel.resumeTracking(context) },
-                        onStopClick = { viewModel.stopTracking(context) }
+                        onStopClick = { viewModel.stopTracking(context) },
+                        onToggleMotionClick = { viewModel.toggleSimulatedMotionState(context) },
+                        onSimulateJitterClick = { viewModel.insertSimulatedJitterPoint() }
                     )
                 }
 
@@ -217,13 +225,17 @@ fun HomeScreen(
 private fun TrackingControlCard(
     isServiceRunning: Boolean,
     isServicePaused: Boolean,
+    motionState: MotionState,
+    jitterCount: Int,
     activeSession: TrackingSessionEntity?,
     latestPoint: LocationPointEntity?,
     pointCount: Int,
     onStartClick: () -> Unit,
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
-    onStopClick: () -> Unit
+    onStopClick: () -> Unit,
+    onToggleMotionClick: () -> Unit,
+    onSimulateJitterClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -241,7 +253,7 @@ private fun TrackingControlCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header Baris Status
+            // Header Baris Status & Adaptive Polling Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -281,7 +293,74 @@ private fun TrackingControlCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Badge Adaptive Polling (Bergerak vs Diam)
+            if (isServiceRunning) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isMoving = motionState == MotionState.MOVING
+                    val badgeColor = if (isMoving) Color(0xFF1B5E20) else Color(0xFF0D47A1)
+                    val badgeIcon = if (isMoving) Icons.AutoMirrored.Filled.DirectionsWalk else Icons.Default.BatterySaver
+                    val badgeText = if (isMoving) "BERGERAK (Polling 5s)" else "DIAM / IDLE (Polling 60s)"
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = badgeColor.copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = badgeIcon,
+                                contentDescription = null,
+                                tint = badgeColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor
+                            )
+                        }
+                    }
+
+                    if (jitterCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "$jitterCount Jitter Ditolak",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // Metrik Real-time saat Service Berjalan
             AnimatedVisibility(visible = isServiceRunning && activeSession != null) {
@@ -292,7 +371,7 @@ private fun TrackingControlCard(
                     ) {
                         MetricItem(
                             icon = Icons.Default.MyLocation,
-                            label = "Titik GPS",
+                            label = "Titik GPS Valid",
                             value = "$pointCount titik",
                             modifier = Modifier.weight(1f)
                         )
@@ -338,14 +417,39 @@ private fun TrackingControlCard(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Baris Tombol Uji Coba Pengujian Fitur Modul 3
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onToggleMotionClick,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = if (motionState == MotionState.MOVING) "Simulasi Diam (Idle)" else "Simulasi Bergerak",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onSimulateJitterClick,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Tes Jitter (+1)",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
             // Tombol Aksi Kontrol
             if (!isServiceRunning) {
                 Text(
-                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service berinterval 5 detik dengan persistensi Room.",
+                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service. Interval beradaptasi otomatis (5s saat jalan, 60s saat diam di meja).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

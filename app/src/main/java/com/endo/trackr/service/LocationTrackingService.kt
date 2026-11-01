@@ -19,13 +19,13 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.endo.trackr.MainActivity
-import com.endo.trackr.R
 import com.endo.trackr.TrackRApplication
-import com.endo.trackr.core.util.DateTimeUtils
+import com.endo.trackr.core.util.GpsJitterFilter
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.data.local.entity.LocationPointEntity
-import com.endo.trackr.data.local.entity.TrackingStatus
 import com.endo.trackr.data.repository.LocationRepository
+import com.endo.trackr.service.motion.MotionDetector
+import com.endo.trackr.service.motion.MotionState
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -43,7 +43,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Foreground Service untuk mencatat pergerakan lokasi GPS di latar belakang.
- * Memenuhi kepatuhan Android 14+ (targetSdk = 37) dengan tipe `location`.
+ * Memenuhi kepatuhan Android 14+ (targetSdk = 37) dan mendukung Adaptive Polling
+ * (5s interval saat bergerak, 60s idle saat diam) serta GPS Jitter Filtering.
  */
 class LocationTrackingService : Service() {
 
@@ -51,11 +52,13 @@ class LocationTrackingService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationRepository: LocationRepository
     private lateinit var notificationManager: NotificationManager
+    private lateinit var motionDetector: MotionDetector
 
     private var activeSessionId: Long? = null
     private var lastRecordedLocation: Location? = null
     private var accumulatedDistanceMeters: Double = 0.0
     private var recordedPointCount: Int = 0
+    private var filteredJitterCount: Int = 0
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -70,6 +73,7 @@ class LocationTrackingService : Service() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationRepository = (application as TrackRApplication).container.locationRepository
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        motionDetector = MotionDetector(this)
         createNotificationChannel()
     }
 
@@ -85,6 +89,14 @@ class LocationTrackingService : Service() {
             ACTION_PAUSE -> pauseTracking()
             ACTION_RESUME -> resumeTracking()
             ACTION_STOP -> stopTracking()
+            ACTION_SIMULATE_MOTION_STATE -> {
+                val targetStateName = intent.getStringExtra(EXTRA_MOTION_STATE_NAME)
+                if (targetStateName != null) {
+                    val targetState = MotionState.valueOf(targetStateName)
+                    motionDetector.forceState(targetState)
+                    handleMotionStateChanged(targetState)
+                }
+            }
         }
 
         return START_STICKY
@@ -101,6 +113,8 @@ class LocationTrackingService : Service() {
             _currentSessionId.value = actualSessionId
             _isTrackingRunning.value = true
             _isTrackingPaused.value = false
+            filteredJitterCount = 0
+            _jitterCount.value = 0
 
             // Muat data akumulasi awal jika sesi sudah ada
             val existingSession = locationRepository.getSessionByIdSync(actualSessionId)
@@ -109,22 +123,58 @@ class LocationTrackingService : Service() {
                 recordedPointCount = existingSession.pointCount
             }
 
+            // Mulai pendeteksi gerak accelerometer
+            motionDetector.startListening { newState ->
+                handleMotionStateChanged(newState)
+            }
+            _currentMotionState.value = motionDetector.currentState
+
             // Tampilkan Foreground Service Notification (Android 14+ compliant)
             val notification = buildNotification(
-                title = "TrackR — Merekam Rute",
+                title = "TrackR — Merekam Rute (Bergerak)",
                 contentText = "Menunggu sinyal GPS...",
                 isPaused = false
             )
             startForegroundWithCompliance(notification)
 
             // Mulai request lokasi
-            requestLocationUpdates()
+            requestLocationUpdates(motionDetector.currentState)
+        }
+    }
+
+    private fun handleMotionStateChanged(newState: MotionState) {
+        Log.d(TAG, "Motion state changed to: $newState. Adjusting GPS polling interval...")
+        _currentMotionState.value = newState
+
+        if (_isTrackingRunning.value && !_isTrackingPaused.value) {
+            // Pasang ulang request lokasi dengan parameter interval baru
+            requestLocationUpdates(newState)
+
+            // Perbarui notifikasi foreground
+            val notifTitle = if (newState == MotionState.MOVING) {
+                "TrackR — Merekam Rute (Bergerak)"
+            } else {
+                "TrackR — Diam (Idle / Hemat Baterai)"
+            }
+            val formattedDistance = LocationUtils.formatDistance(accumulatedDistanceMeters)
+            val notifContent = if (newState == MotionState.MOVING) {
+                "$recordedPointCount titik • $formattedDistance"
+            } else {
+                "$recordedPointCount titik • $formattedDistance (Polling Melambat 60s)"
+            }
+            val notification = buildNotification(
+                title = notifTitle,
+                contentText = notifContent,
+                isPaused = false
+            )
+            notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }
 
     private fun pauseTracking() {
         Log.d(TAG, "Pausing location updates")
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        motionDetector.stopListening()
         _isTrackingPaused.value = true
 
         val sessionId = activeSessionId
@@ -153,6 +203,11 @@ class LocationTrackingService : Service() {
             }
         }
 
+        motionDetector.startListening { newState ->
+            handleMotionStateChanged(newState)
+        }
+        _currentMotionState.value = motionDetector.currentState
+
         val notification = buildNotification(
             title = "TrackR — Merekam Rute",
             contentText = "$recordedPointCount titik • ${LocationUtils.formatDistance(accumulatedDistanceMeters)}",
@@ -160,12 +215,13 @@ class LocationTrackingService : Service() {
         )
         notificationManager.notify(NOTIFICATION_ID, notification)
 
-        requestLocationUpdates()
+        requestLocationUpdates(motionDetector.currentState)
     }
 
     private fun stopTracking() {
         Log.d(TAG, "Stopping location service")
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        motionDetector.stopListening()
 
         val sessionId = activeSessionId
         if (sessionId != null) {
@@ -177,16 +233,19 @@ class LocationTrackingService : Service() {
         _isTrackingRunning.value = false
         _isTrackingPaused.value = false
         _currentSessionId.value = null
+        _currentMotionState.value = MotionState.MOVING
+        _jitterCount.value = 0
         activeSessionId = null
         lastRecordedLocation = null
         accumulatedDistanceMeters = 0.0
         recordedPointCount = 0
+        filteredJitterCount = 0
 
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun requestLocationUpdates() {
+    private fun requestLocationUpdates(state: MotionState) {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -201,9 +260,20 @@ class LocationTrackingService : Service() {
             return
         }
 
-        // Interval 5 detik (5000ms), min interval 3 detik
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-            .setMinUpdateIntervalMillis(3000L)
+        // Hapus callback aktif sebelum mendaftarkan interval baru
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+
+        // Polling Adaptif:
+        // Saat MOVING: Interval 5 detik (5000ms), min 3 detik, PRIORITY_HIGH_ACCURACY
+        // Saat STATIONARY: Interval 60 detik (60000ms), min 30 detik, PRIORITY_BALANCED_POWER_ACCURACY
+        val (intervalMs, minIntervalMs, priority) = if (state == MotionState.MOVING) {
+            Triple(5000L, 3000L, Priority.PRIORITY_HIGH_ACCURACY)
+        } else {
+            Triple(60000L, 30000L, Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+        }
+
+        val locationRequest = LocationRequest.Builder(priority, intervalMs)
+            .setMinUpdateIntervalMillis(minIntervalMs)
             .setMinUpdateDistanceMeters(0f)
             .build()
 
@@ -213,7 +283,7 @@ class LocationTrackingService : Service() {
                 locationCallback,
                 Looper.getMainLooper()
             )
-            Log.d(TAG, "Location updates requested successfully (5s interval)")
+            Log.d(TAG, "Location updates requested for $state: interval=${intervalMs}ms, priority=$priority")
         } catch (e: SecurityException) {
             Log.e(TAG, "SecurityException requesting location updates", e)
         }
@@ -223,7 +293,33 @@ class LocationTrackingService : Service() {
         val sessionId = activeSessionId ?: return
 
         serviceScope.launch {
-            // Hitung delta jarak jika ada titik sebelumnya
+            // 1. Evaluasi Jitter GPS
+            val isJitter = GpsJitterFilter.isJitter(location, lastRecordedLocation)
+
+            if (isJitter) {
+                filteredJitterCount += 1
+                _jitterCount.value = filteredJitterCount
+                Log.w(
+                    TAG,
+                    "GPS Jitter detected (Acc: ±${location.accuracy}m). Marked as jitter, skipped from distance."
+                )
+
+                // Simpan titik dengan penanda isJitter = true (tidak dihitung dalam akumulasi jarak)
+                val jitterPoint = LocationPointEntity(
+                    sessionId = sessionId,
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    altitude = location.altitude,
+                    accuracy = location.accuracy,
+                    speed = location.speed,
+                    timestamp = location.time.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                    isJitter = true
+                )
+                locationRepository.insertLocationPoint(jitterPoint)
+                return@launch
+            }
+
+            // 2. Titik Valid — Hitung delta jarak Haversine
             var deltaDistance = 0.0
             val lastLoc = lastRecordedLocation
             if (lastLoc != null) {
@@ -238,19 +334,24 @@ class LocationTrackingService : Service() {
             accumulatedDistanceMeters += deltaDistance
             recordedPointCount += 1
 
-            // Simpan titik ke Room Database
-            val pointEntity = LocationPointEntity(
+            // Laporkan perpindahan ke MotionDetector
+            motionDetector.reportGpsDisplacement(deltaDistance)
+            motionDetector.checkStationaryTimeout()
+
+            // Simpan titik valid ke Room Database
+            val validPoint = LocationPointEntity(
                 sessionId = sessionId,
                 latitude = location.latitude,
                 longitude = location.longitude,
                 altitude = location.altitude,
                 accuracy = location.accuracy,
                 speed = location.speed,
-                timestamp = location.time.takeIf { it > 0 } ?: System.currentTimeMillis()
+                timestamp = location.time.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                isJitter = false
             )
-            locationRepository.insertLocationPoint(pointEntity)
+            locationRepository.insertLocationPoint(validPoint)
 
-            // Update sesi
+            // Update sesi di basis data
             val currentSession = locationRepository.getSessionByIdSync(sessionId)
             if (currentSession != null) {
                 val now = System.currentTimeMillis()
@@ -266,8 +367,13 @@ class LocationTrackingService : Service() {
 
             // Perbarui teks notifikasi
             val formattedDistance = LocationUtils.formatDistance(accumulatedDistanceMeters)
+            val notifTitle = if (motionDetector.currentState == MotionState.MOVING) {
+                "TrackR — Merekam Rute (Bergerak)"
+            } else {
+                "TrackR — Diam (Idle / Hemat Baterai)"
+            }
             val updatedNotification = buildNotification(
-                title = "TrackR — Merekam Rute",
+                title = notifTitle,
                 contentText = "$recordedPointCount titik • $formattedDistance",
                 isPaused = false
             )
@@ -360,10 +466,13 @@ class LocationTrackingService : Service() {
         super.onDestroy()
         Log.d(TAG, "LocationTrackingService destroyed")
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        motionDetector.stopListening()
         serviceScope.cancel()
         _isTrackingRunning.value = false
         _isTrackingPaused.value = false
         _currentSessionId.value = null
+        _currentMotionState.value = MotionState.MOVING
+        _jitterCount.value = 0
     }
 
     companion object {
@@ -376,8 +485,10 @@ class LocationTrackingService : Service() {
         const val ACTION_PAUSE = "com.endo.trackr.action.PAUSE"
         const val ACTION_RESUME = "com.endo.trackr.action.RESUME"
         const val ACTION_STOP = "com.endo.trackr.action.STOP"
+        const val ACTION_SIMULATE_MOTION_STATE = "com.endo.trackr.action.SIMULATE_MOTION_STATE"
 
         const val EXTRA_SESSION_ID = "extra_session_id"
+        const val EXTRA_MOTION_STATE_NAME = "extra_motion_state_name"
 
         private val _isTrackingRunning = MutableStateFlow(false)
         val isTrackingRunning: StateFlow<Boolean> = _isTrackingRunning.asStateFlow()
@@ -387,6 +498,12 @@ class LocationTrackingService : Service() {
 
         private val _currentSessionId = MutableStateFlow<Long?>(null)
         val currentSessionId: StateFlow<Long?> = _currentSessionId.asStateFlow()
+
+        private val _currentMotionState = MutableStateFlow(MotionState.MOVING)
+        val currentMotionState: StateFlow<MotionState> = _currentMotionState.asStateFlow()
+
+        private val _jitterCount = MutableStateFlow(0)
+        val jitterCount: StateFlow<Int> = _jitterCount.asStateFlow()
 
         fun startService(context: Context, sessionId: Long? = null) {
             val intent = Intent(context, LocationTrackingService::class.java).apply {
@@ -417,6 +534,14 @@ class LocationTrackingService : Service() {
         fun stopService(context: Context) {
             val intent = Intent(context, LocationTrackingService::class.java).apply {
                 action = ACTION_STOP
+            }
+            context.startService(intent)
+        }
+
+        fun setSimulatedMotionState(context: Context, state: MotionState) {
+            val intent = Intent(context, LocationTrackingService::class.java).apply {
+                action = ACTION_SIMULATE_MOTION_STATE
+                putExtra(EXTRA_MOTION_STATE_NAME, state.name)
             }
             context.startService(intent)
         }
