@@ -23,7 +23,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.data.local.entity.LocationPointEntity
+import com.endo.trackr.data.local.entity.StayPointEntity
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -32,13 +34,14 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 
 /**
- * Komponen peta OpenStreetMap (osmdroid) berbasis Jetpack Compose yang aman terhadap lifecycle
- * dan merender jejak rute perjalanan (Polyline) secara reaktif dari Room Database.
+ * Komponen peta OpenStreetMap (osmdroid) berbasis Jetpack Compose yang aman terhadap lifecycle,
+ * merender jejak rute perjalanan (Polyline) dan marker titik singgah (Stay Points).
  */
 @Composable
 fun OsmMapView(
     modifier: Modifier = Modifier,
     points: List<LocationPointEntity> = emptyList(),
+    stayPoints: List<StayPointEntity> = emptyList(),
     latestPoint: LocationPointEntity? = null,
     isTrackingActive: Boolean = false
 ) {
@@ -113,12 +116,24 @@ fun OsmMapView(
                     val startMarker = Marker(view).apply {
                         position = GeoPoint(startPoint.latitude, startPoint.longitude)
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        title = "Titik Awal Keberangkatan"
+                        title = "Titik Keberangkatan"
+                        snippet = DateTimeUtils.formatTimeOnly(startPoint.timestamp)
                     }
                     view.overlays.add(startMarker)
                 }
 
-                // 3. Marker Posisi Terkini
+                // 3. Marker Titik Singgah (Stay Points)
+                for (stay in stayPoints) {
+                    val stayMarker = Marker(view).apply {
+                        position = GeoPoint(stay.latitude, stay.longitude)
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        title = stay.resolvedAddress ?: "Titik Singgah"
+                        snippet = "Singgah: ${DateTimeUtils.formatDuration(stay.durationSeconds)} (${stay.pointCount} titik)"
+                    }
+                    view.overlays.add(stayMarker)
+                }
+
+                // 4. Marker Posisi Terkini
                 if (latestPoint != null) {
                     val currentGeoPoint = GeoPoint(latestPoint.latitude, latestPoint.longitude)
                     val currentMarker = Marker(view).apply {

@@ -18,7 +18,8 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
     override val locationRepository: LocationRepository by lazy {
         OfflineLocationRepository(
             sessionDao = database.trackingSessionDao(),
-            pointDao = database.locationPointDao()
+            pointDao = database.locationPointDao(),
+            stayPointDao = database.stayPointDao()
         )
     }
 }

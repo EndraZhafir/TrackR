@@ -5,26 +5,30 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.endo.trackr.data.local.dao.LocationPointDao
+import com.endo.trackr.data.local.dao.StayPointDao
 import com.endo.trackr.data.local.dao.TrackingSessionDao
 import com.endo.trackr.data.local.entity.LocationPointEntity
+import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 
 /**
- * Basis data Room utama untuk TrackR yang mengelola tabel [TrackingSessionEntity]
- * dan [LocationPointEntity].
+ * Basis data Room utama untuk TrackR yang mengelola tabel [TrackingSessionEntity],
+ * [LocationPointEntity], dan [StayPointEntity].
  */
 @Database(
     entities = [
         TrackingSessionEntity::class,
-        LocationPointEntity::class
+        LocationPointEntity::class,
+        StayPointEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class TrackRDatabase : RoomDatabase() {
 
     abstract fun trackingSessionDao(): TrackingSessionDao
     abstract fun locationPointDao(): LocationPointDao
+    abstract fun stayPointDao(): StayPointDao
 
     companion object {
         @Volatile
