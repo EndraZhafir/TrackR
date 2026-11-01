@@ -113,6 +113,10 @@ class OfflineLocationRepository(
         stayPointDao.insertStayPoints(stayPoints)
     }
 
+    override suspend fun updateStayPointAddress(stayPointId: Long, address: String) {
+        stayPointDao.updateResolvedAddress(stayPointId, address)
+    }
+
     override suspend fun recalculateStayPoints(
         sessionId: Long,
         timeThresholdMillis: Long

@@ -10,10 +10,12 @@ import com.endo.trackr.core.util.TimelineSegment
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
+import com.endo.trackr.data.repository.GeocodingRepository
 import com.endo.trackr.data.repository.LocationRepository
 import com.endo.trackr.service.LocationTrackingService
 import com.endo.trackr.service.motion.MotionState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -37,16 +39,19 @@ data class HomeUiState(
     val isServicePaused: Boolean = false,
     val motionState: MotionState = MotionState.MOVING,
     val jitterCount: Int = 0,
+    val resolvingStayPointIds: Set<Long> = emptySet(),
+    val isBatchGeocoding: Boolean = false,
     val isLoading: Boolean = false
 )
 
 /**
  * ViewModel untuk Dashboard utama, pengontrol Foreground Service,
- * visualisasi peta, dan Smart Stay-Point Clustering Timeline.
+ * visualisasi peta, Smart Stay-Point Clustering Timeline, dan On-Demand Reverse Geocoding.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
-    private val locationRepository: LocationRepository
+    private val locationRepository: LocationRepository,
+    private val geocodingRepository: GeocodingRepository
 ) : ViewModel() {
 
     private val activeSessionFlow = locationRepository.getActiveSession()
@@ -68,6 +73,9 @@ class HomeViewModel(
         }
     }
 
+    private val _resolvingStayPointIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val _isBatchGeocoding = MutableStateFlow(false)
+
     val uiState: StateFlow<HomeUiState> = combine(
         combine(activeSessionFlow, allSessionsFlow, activePointsFlow, stayPointsFlow) { activeSession, sessions, activePoints, stayPoints ->
             Quintuple(activeSession, sessions, activePoints, stayPoints, Unit)
@@ -79,8 +87,11 @@ class HomeViewModel(
             LocationTrackingService.jitterCount
         ) { isRunning, isPaused, motionState, jitterCount ->
             Quad(isRunning, isPaused, motionState, jitterCount)
+        },
+        combine(_resolvingStayPointIds, _isBatchGeocoding) { resolvingIds, isBatch ->
+            resolvingIds to isBatch
         }
-    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount) ->
+    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch) ->
         val segments = StayPointDetector.buildTimelineSegments(activePoints, stayPoints)
 
         HomeUiState(
@@ -95,6 +106,8 @@ class HomeViewModel(
             isServicePaused = isPaused,
             motionState = motionState,
             jitterCount = jitterCount,
+            resolvingStayPointIds = resolvingIds,
+            isBatchGeocoding = isBatch,
             isLoading = false
         )
     }.stateIn(
@@ -159,9 +172,6 @@ class HomeViewModel(
         }
     }
 
-    /**
-     * Memicu kalkulasi Stay-Point Clustering untuk sesi saat ini secara manual.
-     */
     fun extractStayPointsNow(thresholdMinutes: Int = 10) {
         val currentSession = uiState.value.activeSession ?: return
         viewModelScope.launch {
@@ -169,6 +179,42 @@ class HomeViewModel(
                 sessionId = currentSession.id,
                 timeThresholdMillis = thresholdMinutes * 60 * 1000L
             )
+        }
+    }
+
+    /**
+     * Menerjemahkan koordinat satu titik singgah menjadi nama jalan/tempat secara On-Demand
+     * dan menyimpannya ke cache basis data Room.
+     */
+    fun resolveAddressForStayPoint(stayPointId: Long, latitude: Double, longitude: Double) {
+        viewModelScope.launch {
+            _resolvingStayPointIds.value = _resolvingStayPointIds.value + stayPointId
+            val address = geocodingRepository.reverseGeocode(latitude, longitude)
+            if (address != null) {
+                locationRepository.updateStayPointAddress(stayPointId, address)
+            }
+            _resolvingStayPointIds.value = _resolvingStayPointIds.value - stayPointId
+        }
+    }
+
+    /**
+     * Menerjemahkan seluruh titik singgah yang belum memiliki nama alamat secara batch.
+     */
+    fun resolveAllUnresolvedStayPoints() {
+        val unresolved = uiState.value.stayPoints.filter { it.resolvedAddress == null }
+        if (unresolved.isEmpty()) return
+
+        viewModelScope.launch {
+            _isBatchGeocoding.value = true
+            for (stay in unresolved) {
+                _resolvingStayPointIds.value = _resolvingStayPointIds.value + stay.id
+                val address = geocodingRepository.reverseGeocode(stay.latitude, stay.longitude)
+                if (address != null) {
+                    locationRepository.updateStayPointAddress(stay.id, address)
+                }
+                _resolvingStayPointIds.value = _resolvingStayPointIds.value - stay.id
+            }
+            _isBatchGeocoding.value = false
         }
     }
 
@@ -192,14 +238,14 @@ class HomeViewModel(
                 points.add(
                     LocationPointEntity(
                         sessionId = sessionId,
-                        latitude = monasLat + (Math.random() - 0.5) * 0.0001, // Jitter mikro ~10 meter
+                        latitude = monasLat + (Math.random() - 0.5) * 0.0001,
                         longitude = monasLng + (Math.random() - 0.5) * 0.0001,
                         accuracy = 4.0f,
                         speed = 0.2f,
                         timestamp = timeCursor
                     )
                 )
-                timeCursor += 60 * 1000L // tiap 1 menit
+                timeCursor += 60 * 1000L
             }
 
             // 2. Perjalanan Bergerak Monas -> Bundaran HI (~2.8 km) - 20 menit
@@ -216,7 +262,7 @@ class HomeViewModel(
                         latitude = currentLat,
                         longitude = currentLng,
                         accuracy = 5.0f,
-                        speed = 8.5f, // ~30 km/h
+                        speed = 8.5f,
                         timestamp = timeCursor
                     )
                 )

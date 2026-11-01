@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,6 +76,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
+import com.endo.trackr.core.util.TimelineSegment
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
@@ -134,7 +136,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 5: Smart Stay-Point Clustering & Timeline",
+                            text = "Modul 6: On-Demand Reverse Geocoding",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -278,7 +280,7 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    // TAB 1: SMART STAY-POINT CLUSTERING TIMELINE
+                    // TAB 1: SMART STAY-POINT CLUSTERING TIMELINE DENGAN ON-DEMAND GEOCODING
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -287,9 +289,12 @@ fun HomeScreen(
                     ) {
                         item {
                             Spacer(modifier = Modifier.height(4.dp))
+                            val unresolvedCount = uiState.stayPoints.count { it.resolvedAddress == null }
                             TimelineHeaderCard(
                                 stayPointCount = uiState.stayPoints.size,
                                 totalPointCount = uiState.totalPointCount,
+                                unresolvedCount = unresolvedCount,
+                                isBatchGeocoding = uiState.isBatchGeocoding,
                                 onGenerateDemo = {
                                     viewModel.generateSimulatedTimelineSession()
                                     Toast.makeText(context, "Sesi simulasi perjalanan & singgah dibuat!", Toast.LENGTH_SHORT).show()
@@ -297,6 +302,9 @@ fun HomeScreen(
                                 onRecluster = {
                                     viewModel.extractStayPointsNow(thresholdMinutes = 5)
                                     Toast.makeText(context, "Stay points diekstrak ulang!", Toast.LENGTH_SHORT).show()
+                                },
+                                onResolveAllAddresses = {
+                                    viewModel.resolveAllUnresolvedStayPoints()
                                 }
                             )
                         }
@@ -319,7 +327,7 @@ fun HomeScreen(
                                         )
                                         Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = "Mulai pelacakan atau tekan tombol 'Simulasi Demo' di atas untuk melihat bagaimana ratusan titik GPS dikelompokkan menjadi Titik Singgah.",
+                                            text = "Mulai pelacakan atau tekan tombol 'Simulasi Demo' di atas untuk melihat bagaimana ratusan titik GPS dikelompokkan dan diterjemahkan menjadi nama jalan/tempat.",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.outline
                                         )
@@ -330,8 +338,24 @@ fun HomeScreen(
                             itemsIndexed(
                                 items = uiState.timelineSegments
                             ) { index, segment ->
+                                val isResolving = if (segment is TimelineSegment.Stay) {
+                                    uiState.resolvingStayPointIds.contains(segment.stayPoint.id)
+                                } else {
+                                    false
+                                }
+
                                 TimelineSegmentItem(
                                     segment = segment,
+                                    isResolvingAddress = isResolving,
+                                    onResolveAddress = {
+                                        if (segment is TimelineSegment.Stay) {
+                                            viewModel.resolveAddressForStayPoint(
+                                                stayPointId = segment.stayPoint.id,
+                                                latitude = segment.stayPoint.latitude,
+                                                longitude = segment.stayPoint.longitude
+                                            )
+                                        }
+                                    },
                                     isLastItem = index == uiState.timelineSegments.size - 1
                                 )
                             }
@@ -351,8 +375,11 @@ fun HomeScreen(
 private fun TimelineHeaderCard(
     stayPointCount: Int,
     totalPointCount: Int,
+    unresolvedCount: Int,
+    isBatchGeocoding: Boolean,
     onGenerateDemo: () -> Unit,
-    onRecluster: () -> Unit
+    onRecluster: () -> Unit,
+    onResolveAllAddresses: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -367,13 +394,13 @@ private fun TimelineHeaderCard(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Smart Stay-Point Clustering",
+                text = "Smart Stay-Point Clustering & Geocoding",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Algoritma Li et al. mendeteksi $stayPointCount titik singgah dari $totalPointCount total titik GPS (radius 30m).",
+                text = "Algoritma Li et al. mendeteksi $stayPointCount titik singgah dari $totalPointCount total titik GPS. Alamat diterjemahkan on-demand dan disimpan di Room.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -400,6 +427,32 @@ private fun TimelineHeaderCard(
                     Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Ekstrak Ulang")
+                }
+            }
+
+            if (unresolvedCount > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onResolveAllAddresses,
+                    enabled = !isBatchGeocoding,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isBatchGeocoding) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onTertiary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Menerjemahkan Alamat...")
+                    } else {
+                        Icon(imageVector = Icons.Default.TravelExplore, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Terjemahkan Semua Alamat ($unresolvedCount)")
+                    }
                 }
             }
         }
