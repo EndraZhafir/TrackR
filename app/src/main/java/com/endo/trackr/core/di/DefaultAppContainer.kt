@@ -2,12 +2,14 @@ package com.endo.trackr.core.di
 
 import android.content.Context
 import com.endo.trackr.data.local.TrackRDatabase
+import com.endo.trackr.data.repository.DefaultGeocodingRepository
+import com.endo.trackr.data.repository.GeocodingRepository
 import com.endo.trackr.data.repository.LocationRepository
 import com.endo.trackr.data.repository.OfflineLocationRepository
 
 /**
  * Implementasi default dari [AppContainer] yang menginisialisasi Room Database
- * dan menyediakan instance [LocationRepository].
+ * dan menyediakan instance [LocationRepository] serta [GeocodingRepository].
  */
 class DefaultAppContainer(private val context: Context) : AppContainer {
 
@@ -21,5 +23,9 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             pointDao = database.locationPointDao(),
             stayPointDao = database.stayPointDao()
         )
+    }
+
+    override val geocodingRepository: GeocodingRepository by lazy {
+        DefaultGeocodingRepository(context)
     }
 }

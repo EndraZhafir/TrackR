@@ -39,6 +39,7 @@ interface LocationRepository {
     fun getStayPointsForSession(sessionId: Long): Flow<List<StayPointEntity>>
     suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity>
     suspend fun insertStayPoints(stayPoints: List<StayPointEntity>)
+    suspend fun updateStayPointAddress(stayPointId: Long, address: String)
     suspend fun recalculateStayPoints(
         sessionId: Long,
         timeThresholdMillis: Long = StayPointDetector.DEFAULT_TIME_THRESHOLD_MILLIS

@@ -17,13 +17,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,13 +39,17 @@ import androidx.compose.ui.unit.dp
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.core.util.TimelineSegment
+import com.endo.trackr.data.local.entity.StayPointEntity
 
 /**
- * Komponen kartu segmen Timeline yang menghubungkan titik singgah (Stay) dan segmen bergerak (Trip).
+ * Komponen kartu segmen Timeline yang menghubungkan titik singgah (Stay) dan segmen bergerak (Trip),
+ * serta mendukung penerjemahan alamat On-Demand via Geocoder.
  */
 @Composable
 fun TimelineSegmentItem(
     segment: TimelineSegment,
+    isResolvingAddress: Boolean = false,
+    onResolveAddress: () -> Unit = {},
     isLastItem: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -111,7 +118,11 @@ fun TimelineSegmentItem(
                 .padding(bottom = if (isLastItem) 0.dp else 16.dp)
         ) {
             when (segment) {
-                is TimelineSegment.Stay -> StayPointCard(stay = segment.stayPoint)
+                is TimelineSegment.Stay -> StayPointCard(
+                    stay = segment.stayPoint,
+                    isResolving = isResolvingAddress,
+                    onResolveClick = onResolveAddress
+                )
                 is TimelineSegment.Trip -> TripSegmentCard(trip = segment)
             }
         }
@@ -119,7 +130,11 @@ fun TimelineSegmentItem(
 }
 
 @Composable
-private fun StayPointCard(stay: com.endo.trackr.data.local.entity.StayPointEntity) {
+private fun StayPointCard(
+    stay: StayPointEntity,
+    isResolving: Boolean,
+    onResolveClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -137,12 +152,24 @@ private fun StayPointCard(stay: com.endo.trackr.data.local.entity.StayPointEntit
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = stay.resolvedAddress ?: "Singgah di Lokasi",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    if (stay.resolvedAddress != null) {
+                        Text(
+                            text = stay.resolvedAddress,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else {
+                        Text(
+                            text = "Titik Singgah #${stay.id}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = Color(0xFFE65100).copy(alpha = 0.15f)
@@ -181,10 +208,61 @@ private fun StayPointCard(stay: com.endo.trackr.data.local.entity.StayPointEntit
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${stay.pointCount} titik koordinat dikelompokkan • Lat: ${String.format("%.5f", stay.latitude)}, Lng: ${String.format("%.5f", stay.longitude)}",
+                text = "${stay.pointCount} titik dikelompokkan • Lat: ${String.format("%.5f", stay.latitude)}, Lng: ${String.format("%.5f", stay.longitude)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
+
+            // Baris Status & Tombol On-Demand Reverse Geocoding
+            Spacer(modifier = Modifier.height(8.dp))
+            if (stay.resolvedAddress != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "Alamat Tersimpan di Cache Room",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF2E7D32)
+                    )
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onResolveClick,
+                    enabled = !isResolving,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isResolving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Mencari Nama Alamat...",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.LocationSearching,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Terjemahkan Nama Tempat (On-Demand)",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
         }
     }
 }
