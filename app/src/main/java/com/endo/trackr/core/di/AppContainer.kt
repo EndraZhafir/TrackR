@@ -1,5 +1,6 @@
 package com.endo.trackr.core.di
 
+import com.endo.trackr.data.repository.GeocodingRepository
 import com.endo.trackr.data.repository.LocationRepository
 
 /**
@@ -8,4 +9,5 @@ import com.endo.trackr.data.repository.LocationRepository
  */
 interface AppContainer {
     val locationRepository: LocationRepository
+    val geocodingRepository: GeocodingRepository
 }

@@ -15,7 +15,8 @@ object AppViewModelProvider {
     val Factory = viewModelFactory {
         initializer {
             HomeViewModel(
-                locationRepository = trackRApplication().container.locationRepository
+                locationRepository = trackRApplication().container.locationRepository,
+                geocodingRepository = trackRApplication().container.geocodingRepository
             )
         }
     }

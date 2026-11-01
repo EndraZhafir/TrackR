@@ -1,11 +1,14 @@
 package com.endo.trackr.data.repository
 
+import com.endo.trackr.core.util.StayPointDetector
 import com.endo.trackr.data.local.entity.LocationPointEntity
+import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Interface Repository untuk mengabstraksi sumber data lokasi dan sesi pelacakan.
+ * Interface Repository untuk mengabstraksi sumber data lokasi, sesi pelacakan,
+ * dan titik singgah (Stay Points).
  */
 interface LocationRepository {
 
@@ -28,7 +31,19 @@ interface LocationRepository {
     fun getPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>>
     suspend fun getPointsForSessionSync(sessionId: Long): List<LocationPointEntity>
     fun getValidPointsForSession(sessionId: Long): Flow<List<LocationPointEntity>>
+    fun getAllValidPoints(): Flow<List<LocationPointEntity>>
     fun getLatestPoint(sessionId: Long): Flow<LocationPointEntity?>
     suspend fun getLatestPointSync(sessionId: Long): LocationPointEntity?
     fun getPointCountForSession(sessionId: Long): Flow<Int>
+
+    // --- Manajemen Titik Singgah (Stay-Point Clustering) ---
+    fun getStayPointsForSession(sessionId: Long): Flow<List<StayPointEntity>>
+    suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity>
+    fun getAllStayPoints(): Flow<List<StayPointEntity>>
+    suspend fun insertStayPoints(stayPoints: List<StayPointEntity>)
+    suspend fun updateStayPointAddress(stayPointId: Long, address: String)
+    suspend fun recalculateStayPoints(
+        sessionId: Long,
+        timeThresholdMillis: Long = StayPointDetector.DEFAULT_TIME_THRESHOLD_MILLIS
+    ): List<StayPointEntity>
 }

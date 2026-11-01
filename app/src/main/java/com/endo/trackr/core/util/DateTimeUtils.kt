@@ -3,6 +3,7 @@ package com.endo.trackr.core.util
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Utility helper untuk memformat timestamp (epoch millis) dan durasi waktu.
@@ -23,6 +24,25 @@ object DateTimeUtils {
 
     fun formatDateOnly(epochMillis: Long): String {
         return dateOnlyFormat.format(Date(epochMillis))
+    }
+
+    /**
+     * Memformat timestamp menjadi format ISO 8601 UTC standar (misal: "2026-11-01T11:00:00Z").
+     * Wajib untuk format GIS seperti GPX, KML, dan GeoJSON.
+     */
+    fun formatIso8601Utc(epochMillis: Long): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        return sdf.format(Date(epochMillis))
+    }
+
+    /**
+     * Memformat timestamp untuk penamaan file ekspor yang bersih tanpa karakter terlarang (misal: "20261101_180000").
+     */
+    fun formatFilenameTimestamp(epochMillis: Long): String {
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+        return sdf.format(Date(epochMillis))
     }
 
     /**

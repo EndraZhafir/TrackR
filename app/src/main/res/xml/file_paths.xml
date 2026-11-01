@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Jalur cache internal untuk berkas ekspor sementara yang akan dibagikan via ShareSheet -->
+    <cache-path
+        name="shared_exports"
+        path="exports/" />
+</paths>
