@@ -53,6 +53,9 @@ dependencies {
     // Google Play Services Location
     implementation(libs.play.services.location)
 
+    // OpenStreetMap (osmdroid)
+    implementation(libs.osmdroid.android)
+
     // Room Database & KSP
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
