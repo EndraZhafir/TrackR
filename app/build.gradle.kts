@@ -50,6 +50,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
 
+    // Google Play Services Location
+    implementation(libs.play.services.location)
+
     // Room Database & KSP
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
