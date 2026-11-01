@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Security
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TravelExplore
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -87,6 +89,8 @@ import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
 import com.endo.trackr.ui.components.ExportDialog
 import com.endo.trackr.ui.components.OsmMapView
+import com.endo.trackr.ui.components.StatsMetricsGrid
+import com.endo.trackr.ui.components.TimeRangeSelector
 import com.endo.trackr.ui.components.TimelineSegmentItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,7 +159,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 7: Export GPX / KML / GeoJSON",
+                            text = "Modul 8: Heatmap & Statistik Jarak (Haversine)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -199,7 +203,7 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                // Tab Navigasi: Peta & Kontrol vs Timeline Harian
+                // Tab Navigasi: Peta & Pelacak, Timeline, Statistik & Heatmap
                 PrimaryTabRow(
                     selectedTabIndex = selectedTabIndex,
                     containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -219,36 +223,45 @@ fun HomeScreen(
                         },
                         icon = { Icon(Icons.Default.Route, contentDescription = null) }
                     )
+                    Tab(
+                        selected = selectedTabIndex == 2,
+                        onClick = { selectedTabIndex = 2 },
+                        text = { Text("Statistik & Heatmap") },
+                        icon = { Icon(Icons.Default.QueryStats, contentDescription = null) }
+                    )
                 }
 
-                if (selectedTabIndex == 0) {
-                    // TAB 0: PETA DAN KONTROL TRACKING
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        item {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(260.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                )
-                            ) {
-                                OsmMapView(
-                                    modifier = Modifier.fillMaxSize(),
-                                    points = uiState.activePoints,
-                                    stayPoints = uiState.stayPoints,
-                                    latestPoint = uiState.latestPoint,
-                                    isTrackingActive = uiState.isServiceRunning && !uiState.isServicePaused
-                                )
+                when (selectedTabIndex) {
+                    0 -> {
+                        // TAB 0: PETA DAN KONTROL TRACKING
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            item {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(260.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                    )
+                                ) {
+                                    OsmMapView(
+                                        modifier = Modifier.fillMaxSize(),
+                                        points = uiState.activePoints,
+                                        stayPoints = uiState.stayPoints,
+                                        latestPoint = uiState.latestPoint,
+                                        isTrackingActive = uiState.isServiceRunning && !uiState.isServicePaused,
+                                        showHeatmap = uiState.showStatsHeatmap,
+                                        onToggleHeatmap = { viewModel.toggleStatsHeatmap() }
+                                    )
+                                }
                             }
-                        }
 
                         item {
                             TrackingControlCard(
@@ -314,7 +327,8 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
-                } else {
+                }
+                1 -> {
                     // TAB 1: SMART STAY-POINT CLUSTERING TIMELINE DENGAN ON-DEMAND GEOCODING
                     LazyColumn(
                         modifier = Modifier
@@ -404,9 +418,114 @@ fun HomeScreen(
                         }
                     }
                 }
+                2 -> {
+                    // TAB 2: ANALITIK STATISTIK & HEATMAP KEPADATAN
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                ) {
+                                    Text(
+                                        text = "Analitik Jarak & Heatmap",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Kalkulasi jarak tempuh matematis rumus Haversine dan visualisasi lapisan kepadatan panas spasial dari rekaman sensor GPS.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    TimeRangeSelector(
+                                        selectedRange = uiState.selectedStatsRange,
+                                        onRangeSelected = { viewModel.setSelectedStatsRange(it) }
+                                    )
+                                }
+                            }
+                        }
+
+                        item {
+                            StatsMetricsGrid(stats = uiState.statsSummary)
+                        }
+
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(300.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            ) {
+                                OsmMapView(
+                                    modifier = Modifier.fillMaxSize(),
+                                    points = uiState.statsPoints,
+                                    stayPoints = uiState.statsStayPoints,
+                                    showHeatmap = uiState.showStatsHeatmap,
+                                    onToggleHeatmap = { viewModel.toggleStatsHeatmap() }
+                                )
+                            }
+                        }
+
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Whatshot,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF3D00),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = "Lapisan Heatmap Dinamis",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Ketuk tombol api di pojok kanan bawah peta untuk beralih antara lapisan kepadatan gradien panas (Heatmap) dan garis rute perjalanan (Polyline).",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+                }
             }
         }
     }
+}
 
     // Modal Dialog Ekspor Data GIS (GPX / KML / GeoJSON)
     if (uiState.exportDialogState.isVisible) {
