@@ -1,19 +1,23 @@
 package com.endo.trackr.data.repository
 
+import com.endo.trackr.core.util.StayPointDetector
 import com.endo.trackr.data.local.dao.LocationPointDao
+import com.endo.trackr.data.local.dao.StayPointDao
 import com.endo.trackr.data.local.dao.TrackingSessionDao
 import com.endo.trackr.data.local.entity.LocationPointEntity
+import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
 import kotlinx.coroutines.flow.Flow
 
 /**
  * Implementasi offline-first dari [LocationRepository] yang langsung berkomunikasi
- * dengan basis data lokal Room via [TrackingSessionDao] dan [LocationPointDao].
+ * dengan basis data lokal Room via [TrackingSessionDao], [LocationPointDao], dan [StayPointDao].
  */
 class OfflineLocationRepository(
     private val sessionDao: TrackingSessionDao,
-    private val pointDao: LocationPointDao
+    private val pointDao: LocationPointDao,
+    private val stayPointDao: StayPointDao
 ) : LocationRepository {
 
     override fun getAllSessions(): Flow<List<TrackingSessionEntity>> =
@@ -65,6 +69,8 @@ class OfflineLocationRepository(
                 status = TrackingStatus.COMPLETED.name
             )
         )
+        // Hitung dan simpan stay points otomatis saat sesi selesai
+        recalculateStayPoints(sessionId)
     }
 
     override suspend fun deleteSession(sessionId: Long) {
@@ -96,4 +102,30 @@ class OfflineLocationRepository(
 
     override fun getPointCountForSession(sessionId: Long): Flow<Int> =
         pointDao.getPointCountForSession(sessionId)
+
+    override fun getStayPointsForSession(sessionId: Long): Flow<List<StayPointEntity>> =
+        stayPointDao.getStayPointsForSession(sessionId)
+
+    override suspend fun getStayPointsForSessionSync(sessionId: Long): List<StayPointEntity> =
+        stayPointDao.getStayPointsForSessionSync(sessionId)
+
+    override suspend fun insertStayPoints(stayPoints: List<StayPointEntity>) {
+        stayPointDao.insertStayPoints(stayPoints)
+    }
+
+    override suspend fun recalculateStayPoints(
+        sessionId: Long,
+        timeThresholdMillis: Long
+    ): List<StayPointEntity> {
+        val rawPoints = pointDao.getPointsForSessionSync(sessionId)
+        val extracted = StayPointDetector.extractStayPoints(
+            rawPoints = rawPoints,
+            timeThresholdMillis = timeThresholdMillis
+        )
+        stayPointDao.deleteStayPointsForSession(sessionId)
+        if (extracted.isNotEmpty()) {
+            stayPointDao.insertStayPoints(extracted)
+        }
+        return extracted
+    }
 }

@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.BatterySaver
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GpsFixed
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -47,15 +51,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +81,7 @@ import com.endo.trackr.data.local.entity.TrackingStatus
 import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
 import com.endo.trackr.ui.components.OsmMapView
+import com.endo.trackr.ui.components.TimelineSegmentItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +91,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
 
     // Konfigurasi Izin Runtime (Location & Notification untuk Android 13+)
     val requiredPermissions = remember {
@@ -124,7 +134,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 4: OSM Map View & Route Polyline",
+                            text = "Modul 5: Smart Stay-Point Clustering & Timeline",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -147,98 +157,249 @@ fun HomeScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 1. Kanvas Peta OpenStreetMap Interaktif
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(260.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        )
-                    ) {
-                        OsmMapView(
-                            modifier = Modifier.fillMaxSize(),
-                            points = uiState.activePoints,
-                            latestPoint = uiState.latestPoint,
-                            isTrackingActive = uiState.isServiceRunning && !uiState.isServicePaused
-                        )
-                    }
-                }
-
-                // 2. Kartu Kontrol & Metrik Pelacakan
-                item {
-                    TrackingControlCard(
-                        isServiceRunning = uiState.isServiceRunning,
-                        isServicePaused = uiState.isServicePaused,
-                        motionState = uiState.motionState,
-                        jitterCount = uiState.jitterCount,
-                        activeSession = uiState.activeSession,
-                        latestPoint = uiState.latestPoint,
-                        pointCount = uiState.totalPointCount,
-                        onStartClick = {
-                            if (hasLocationPermission(context)) {
-                                viewModel.startTracking(context)
-                            } else {
-                                permissionLauncher.launch(requiredPermissions)
-                            }
+                // Tab Navigasi: Peta & Kontrol vs Timeline Harian
+                PrimaryTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    Tab(
+                        selected = selectedTabIndex == 0,
+                        onClick = { selectedTabIndex = 0 },
+                        text = { Text("Peta & Pelacak") },
+                        icon = { Icon(Icons.Default.Map, contentDescription = null) }
+                    )
+                    Tab(
+                        selected = selectedTabIndex == 1,
+                        onClick = { selectedTabIndex = 1 },
+                        text = {
+                            val count = uiState.timelineSegments.size
+                            Text(if (count > 0) "Timeline ($count)" else "Timeline")
                         },
-                        onPauseClick = { viewModel.pauseTracking(context) },
-                        onResumeClick = { viewModel.resumeTracking(context) },
-                        onStopClick = { viewModel.stopTracking(context) },
-                        onToggleMotionClick = { viewModel.toggleSimulatedMotionState(context) },
-                        onSimulateJitterClick = { viewModel.insertSimulatedJitterPoint() }
+                        icon = { Icon(Icons.Default.Route, contentDescription = null) }
                     )
                 }
 
-                // 3. Riwayat Sesi
-                item {
-                    Text(
-                        text = "Riwayat Sesi Tersimpan (${uiState.sessions.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                if (selectedTabIndex == 0) {
+                    // TAB 0: PETA DAN KONTROL TRACKING
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(260.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                )
+                            ) {
+                                OsmMapView(
+                                    modifier = Modifier.fillMaxSize(),
+                                    points = uiState.activePoints,
+                                    stayPoints = uiState.stayPoints,
+                                    latestPoint = uiState.latestPoint,
+                                    isTrackingActive = uiState.isServiceRunning && !uiState.isServicePaused
+                                )
+                            }
+                        }
 
-                if (uiState.sessions.isEmpty()) {
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow
-                        ) {
-                            Text(
-                                text = "Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute di atas peta.",
-                                modifier = Modifier.padding(20.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline
+                        item {
+                            TrackingControlCard(
+                                isServiceRunning = uiState.isServiceRunning,
+                                isServicePaused = uiState.isServicePaused,
+                                motionState = uiState.motionState,
+                                jitterCount = uiState.jitterCount,
+                                activeSession = uiState.activeSession,
+                                latestPoint = uiState.latestPoint,
+                                pointCount = uiState.totalPointCount,
+                                onStartClick = {
+                                    if (hasLocationPermission(context)) {
+                                        viewModel.startTracking(context)
+                                    } else {
+                                        permissionLauncher.launch(requiredPermissions)
+                                    }
+                                },
+                                onPauseClick = { viewModel.pauseTracking(context) },
+                                onResumeClick = { viewModel.resumeTracking(context) },
+                                onStopClick = { viewModel.stopTracking(context) },
+                                onToggleMotionClick = { viewModel.toggleSimulatedMotionState(context) },
+                                onSimulateJitterClick = { viewModel.insertSimulatedJitterPoint() }
                             )
+                        }
+
+                        item {
+                            Text(
+                                text = "Riwayat Sesi Tersimpan (${uiState.sessions.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        if (uiState.sessions.isEmpty()) {
+                            item {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                                ) {
+                                    Text(
+                                        text = "Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute.",
+                                        modifier = Modifier.padding(20.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        } else {
+                            items(
+                                items = uiState.sessions,
+                                key = { it.id }
+                            ) { session ->
+                                SessionHistoryCard(
+                                    session = session,
+                                    onDelete = { viewModel.deleteSession(session.id) }
+                                )
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 } else {
-                    items(
-                        items = uiState.sessions,
-                        key = { it.id }
-                    ) { session ->
-                        SessionHistoryCard(
-                            session = session,
-                            onDelete = { viewModel.deleteSession(session.id) }
-                        )
+                    // TAB 1: SMART STAY-POINT CLUSTERING TIMELINE
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TimelineHeaderCard(
+                                stayPointCount = uiState.stayPoints.size,
+                                totalPointCount = uiState.totalPointCount,
+                                onGenerateDemo = {
+                                    viewModel.generateSimulatedTimelineSession()
+                                    Toast.makeText(context, "Sesi simulasi perjalanan & singgah dibuat!", Toast.LENGTH_SHORT).show()
+                                },
+                                onRecluster = {
+                                    viewModel.extractStayPointsNow(thresholdMinutes = 5)
+                                    Toast.makeText(context, "Stay points diekstrak ulang!", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+
+                        if (uiState.timelineSegments.isEmpty()) {
+                            item {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "Belum Ada Segmen Timeline",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Mulai pelacakan atau tekan tombol 'Simulasi Demo' di atas untuk melihat bagaimana ratusan titik GPS dikelompokkan menjadi Titik Singgah.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            itemsIndexed(
+                                items = uiState.timelineSegments
+                            ) { index, segment ->
+                                TimelineSegmentItem(
+                                    segment = segment,
+                                    isLastItem = index == uiState.timelineSegments.size - 1
+                                )
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
                 }
+            }
+        }
+    }
+}
 
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun TimelineHeaderCard(
+    stayPointCount: Int,
+    totalPointCount: Int,
+    onGenerateDemo: () -> Unit,
+    onRecluster: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Smart Stay-Point Clustering",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Algoritma Li et al. mendeteksi $stayPointCount titik singgah dari $totalPointCount total titik GPS (radius 30m).",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onGenerateDemo,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(imageVector = Icons.Default.AutoGraph, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Simulasi Demo")
+                }
+
+                OutlinedButton(
+                    onClick = onRecluster,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Ekstrak Ulang")
                 }
             }
         }
@@ -473,7 +634,7 @@ private fun TrackingControlCard(
             // Tombol Aksi Kontrol
             if (!isServiceRunning) {
                 Text(
-                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service dan menggambar polyline rute di atas peta.",
+                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service dan mencatat jejak rute di atas peta.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
