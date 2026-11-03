@@ -16,6 +16,9 @@
     <!-- WakeLock untuk menjaga stabilitas background service saat layar mati / Doze Mode -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Izin untuk meminta sistem Android mengabaikan optimasi baterai (anti-kill di ColorOS/OPPO/MIUI) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Permissions for OpenStreetMap (osmdroid) Tiles -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

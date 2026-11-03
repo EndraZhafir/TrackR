@@ -71,6 +71,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -86,6 +87,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
@@ -113,11 +117,29 @@ fun HomeScreen(
 
     // Evaluasi status optimasi baterai (Doze / Background restriction)
     val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showBatteryBanner by rememberSaveable { mutableStateOf(true) }
-    val isIgnoringBattery = remember(showBatteryBanner) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
-        } else true
+    var isIgnoringBattery by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+            } else true
+        )
+    }
+
+    // Perbarui status pengecualian baterai secara dinamis saat user kembali ke aplikasi
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    isIgnoringBattery = powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Pengelompokan sesi tersimpan berdasarkan kategori tanggal (Hari Ini, Kemarin, dll.)
@@ -302,17 +324,41 @@ fun HomeScreen(
                                                 Spacer(modifier = Modifier.height(8.dp))
                                                 FilledTonalButton(
                                                     onClick = {
-                                                        try {
-                                                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                                                data = Uri.parse("package:${context.packageName}")
-                                                            }
-                                                            context.startActivity(intent)
-                                                        } catch (e: Exception) {
+                                                        var launched = false
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                                                             try {
-                                                                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                                                context.startActivity(fallback)
-                                                            } catch (e2: Exception) {
-                                                                Toast.makeText(context, "Buka Pengaturan > Baterai > TrackR untuk mematikan optimasi baterai", Toast.LENGTH_LONG).show()
+                                                                // Metode 1: Dialog sistem langsung (dengan izin REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                                                                val directIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                                    data = Uri.parse("package:${context.packageName}")
+                                                                }
+                                                                context.startActivity(directIntent)
+                                                                launched = true
+                                                            } catch (e: Exception) {
+                                                                // Lanjut ke fallback
+                                                            }
+                                                        }
+
+                                                        if (!launched) {
+                                                            try {
+                                                                // Fallback 1: Halaman Detail Info Aplikasi (OPPO/ColorOS langsung membuka menu Baterai aplikasi)
+                                                                val appDetailsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                                    data = Uri.parse("package:${context.packageName}")
+                                                                }
+                                                                context.startActivity(appDetailsIntent)
+                                                                launched = true
+                                                            } catch (e: Exception) {
+                                                                // Lanjut ke fallback baterai umum
+                                                            }
+                                                        }
+
+                                                        if (!launched) {
+                                                            try {
+                                                                // Fallback 2: Pengaturan Optimasi Baterai Global
+                                                                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                                                context.startActivity(fallbackIntent)
+                                                                launched = true
+                                                            } catch (e: Exception) {
+                                                                Toast.makeText(context, "Buka Pengaturan > Aplikasi > TrackR > Baterai", Toast.LENGTH_LONG).show()
                                                             }
                                                         }
                                                     },
