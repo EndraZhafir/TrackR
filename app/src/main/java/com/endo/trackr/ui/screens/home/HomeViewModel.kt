@@ -38,7 +38,11 @@ data class ExportDialogState(
     val isVisible: Boolean = false,
     val selectedFormat: ExportFormat = ExportFormat.GPX,
     val includeStayPoints: Boolean = true,
-    val filterJitter: Boolean = true
+    val filterJitter: Boolean = true,
+    val targetSessionId: Long? = null,
+    val targetTitle: String = "Jejak TrackR",
+    val targetPoints: List<LocationPointEntity> = emptyList(),
+    val targetStayPoints: List<StayPointEntity> = emptyList()
 )
 
 /**
@@ -287,7 +291,56 @@ class HomeViewModel(
     // ==========================================
 
     fun openExportDialog() {
-        _exportDialogState.value = _exportDialogState.value.copy(isVisible = true)
+        viewModelScope.launch {
+            val activePoints = uiState.value.activePoints
+            val activeSession = uiState.value.activeSession
+            if (activePoints.isNotEmpty()) {
+                _exportDialogState.value = _exportDialogState.value.copy(
+                    isVisible = true,
+                    targetSessionId = activeSession?.id,
+                    targetTitle = activeSession?.title ?: "Jejak Hari Ini",
+                    targetPoints = activePoints,
+                    targetStayPoints = uiState.value.stayPoints
+                )
+            } else {
+                // Jika tidak ada sesi aktif hari ini, gunakan sesi tersimpan paling baru
+                val latestSession = uiState.value.sessions.firstOrNull()
+                if (latestSession != null) {
+                    val points = locationRepository.getPointsForSessionSync(latestSession.id)
+                    val stayPoints = locationRepository.getStayPointsForSessionSync(latestSession.id)
+                    _exportDialogState.value = _exportDialogState.value.copy(
+                        isVisible = true,
+                        targetSessionId = latestSession.id,
+                        targetTitle = latestSession.title ?: "Sesi #${latestSession.id}",
+                        targetPoints = points,
+                        targetStayPoints = stayPoints
+                    )
+                } else {
+                    _exportDialogState.value = _exportDialogState.value.copy(
+                        isVisible = true,
+                        targetSessionId = null,
+                        targetTitle = "Jejak TrackR",
+                        targetPoints = emptyList(),
+                        targetStayPoints = emptyList()
+                    )
+                }
+            }
+        }
+    }
+
+    fun openExportDialogForSession(sessionId: Long) {
+        viewModelScope.launch {
+            val session = locationRepository.getSessionByIdSync(sessionId)
+            val points = locationRepository.getPointsForSessionSync(sessionId)
+            val stayPoints = locationRepository.getStayPointsForSessionSync(sessionId)
+            _exportDialogState.value = _exportDialogState.value.copy(
+                isVisible = true,
+                targetSessionId = sessionId,
+                targetTitle = session?.title ?: "Sesi #$sessionId",
+                targetPoints = points,
+                targetStayPoints = stayPoints
+            )
+        }
     }
 
     fun closeExportDialog() {
@@ -307,21 +360,23 @@ class HomeViewModel(
     }
 
     fun getExportFilename(): String {
-        val currentSessionTitle = uiState.value.activeSession?.title ?: "Jejak"
-        val format = _exportDialogState.value.selectedFormat
-        return DataExporter.generateFilename(currentSessionTitle, format)
+        val state = _exportDialogState.value
+        val title = if (state.targetPoints.isNotEmpty()) state.targetTitle else (uiState.value.activeSession?.title ?: "Jejak")
+        val format = state.selectedFormat
+        return DataExporter.generateFilename(title, format)
     }
 
     fun generateExportContent(): String {
-        val currentSession = uiState.value.activeSession
-        val sessionTitle = currentSession?.title ?: "Jejak TrackR"
         val state = _exportDialogState.value
+        val points = if (state.targetPoints.isNotEmpty()) state.targetPoints else uiState.value.activePoints
+        val stayPoints = if (state.targetPoints.isNotEmpty()) state.targetStayPoints else uiState.value.stayPoints
+        val sessionTitle = if (state.targetPoints.isNotEmpty()) state.targetTitle else (uiState.value.activeSession?.title ?: "Jejak TrackR")
 
         return DataExporter.generateDocument(
             format = state.selectedFormat,
             sessionTitle = sessionTitle,
-            points = uiState.value.activePoints,
-            stayPoints = uiState.value.stayPoints,
+            points = points,
+            stayPoints = stayPoints,
             includeStayPoints = state.includeStayPoints,
             filterJitter = state.filterJitter
         )

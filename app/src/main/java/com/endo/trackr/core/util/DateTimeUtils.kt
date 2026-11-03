@@ -70,4 +70,45 @@ object DateTimeUtils {
         return calA.get(Calendar.YEAR) == calB.get(Calendar.YEAR) &&
                 calA.get(Calendar.DAY_OF_YEAR) == calB.get(Calendar.DAY_OF_YEAR)
     }
+
+    /**
+     * Mengelompokkan timestamp ke dalam kategori tanggal yang ramah pengguna:
+     * - "Hari Ini"
+     * - "Kemarin"
+     * - "Minggu Ini"
+     * - "Bulan Ini"
+     * - Format bulan & tahun (misal: "Oktober 2026") untuk yang lebih lama.
+     */
+    fun getDateCategory(epochMillis: Long): String {
+        val now = Calendar.getInstance()
+        val target = Calendar.getInstance().apply { timeInMillis = epochMillis }
+
+        if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+            now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+        ) {
+            return "Hari Ini"
+        }
+
+        val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        if (yesterday.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+            yesterday.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+        ) {
+            return "Kemarin"
+        }
+
+        if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+            now.get(Calendar.WEEK_OF_YEAR) == target.get(Calendar.WEEK_OF_YEAR)
+        ) {
+            return "Minggu Ini"
+        }
+
+        if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+            now.get(Calendar.MONTH) == target.get(Calendar.MONTH)
+        ) {
+            return "Bulan Ini"
+        }
+
+        val monthYearFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+        return monthYearFormat.format(Date(epochMillis))
+    }
 }
