@@ -14,12 +14,14 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.endo.trackr.MainActivity
 import com.endo.trackr.TrackRApplication
+import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.GpsJitterFilter
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.data.local.entity.LocationPointEntity
@@ -34,6 +36,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +48,8 @@ import kotlinx.coroutines.launch
  * Foreground Service untuk mencatat pergerakan lokasi GPS di latar belakang.
  * Memenuhi kepatuhan Android 14+ (targetSdk = 37) dan mendukung Adaptive Polling
  * (5s interval saat bergerak, 60s idle saat diam) serta GPS Jitter Filtering.
+ * Dilengkapi dengan pemulihan sesi persisten (kebal process death & swipe recent apps),
+ * WakeLock manajemen daya, dan Auto-Day-Rollover (pergantian hari otomatis).
  */
 class LocationTrackingService : Service() {
 
@@ -59,6 +64,7 @@ class LocationTrackingService : Service() {
     private var accumulatedDistanceMeters: Double = 0.0
     private var recordedPointCount: Int = 0
     private var filteredJitterCount: Int = 0
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -78,7 +84,28 @@ class LocationTrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: return START_NOT_STICKY
+        if (intent == null) {
+            // Android me-restart service dengan intent null setelah memori pulih (START_STICKY recovery)
+            Log.d(TAG, "onStartCommand: Service restarted by system with null intent (START_STICKY recovery)")
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val isTracking = prefs.getBoolean(KEY_PERSISTED_IS_TRACKING, false)
+            val isPaused = prefs.getBoolean(KEY_PERSISTED_IS_PAUSED, false)
+            val savedSessionId = prefs.getLong(KEY_PERSISTED_SESSION_ID, -1L)
+
+            if (isTracking && savedSessionId != -1L) {
+                Log.d(TAG, "Memulihkan sesi pelacakan aktif dari penyimpanan persisten: $savedSessionId (paused=$isPaused)")
+                startTracking(savedSessionId)
+                if (isPaused) {
+                    pauseTracking()
+                }
+            } else {
+                Log.d(TAG, "Tidak ada sesi pelacakan aktif di penyimpanan persisten, menghentikan service")
+                stopSelf()
+            }
+            return START_STICKY
+        }
+
+        val action = intent.action ?: return START_STICKY
         Log.d(TAG, "onStartCommand received action: $action")
 
         when (action) {
@@ -102,11 +129,86 @@ class LocationTrackingService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "onTaskRemoved: Aplikasi di-swipe dari Recent Apps / Task Manager")
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isTracking = prefs.getBoolean(KEY_PERSISTED_IS_TRACKING, false)
+
+        if (isTracking && !_isTrackingPaused.value) {
+            Log.d(TAG, "Service sedang aktif melacak rute. Menjaga notifikasi dan proses tetap berjalan di background.")
+            val formattedDistance = LocationUtils.formatDistance(accumulatedDistanceMeters)
+            val notification = buildNotification(
+                title = "TrackR — Merekam Rute (Latar Belakang)",
+                contentText = "$recordedPointCount titik • $formattedDistance",
+                isPaused = false
+            )
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "TrackR:LocationTrackingServiceWakeLock"
+            ).apply {
+                setReferenceCounted(false)
+                acquire(2 * 60 * 60 * 1000L) // 2 jam auto-release safety timeout
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing WakeLock", e)
+        }
+    }
+
+    private fun saveSessionState(sessionId: Long, isTracking: Boolean, isPaused: Boolean) {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_PERSISTED_SESSION_ID, sessionId)
+            .putBoolean(KEY_PERSISTED_IS_TRACKING, isTracking)
+            .putBoolean(KEY_PERSISTED_IS_PAUSED, isPaused)
+            .apply()
+    }
+
+    private fun clearSessionState() {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+    }
+
     private fun startTracking(sessionId: Long?) {
         serviceScope.launch {
+            acquireWakeLock()
+            val now = System.currentTimeMillis()
+
             val actualSessionId = sessionId ?: run {
                 val existingActive = locationRepository.getActiveSessionSync()
-                existingActive?.id ?: locationRepository.startNewSession("Sesi Pelacakan Otomatis")
+                if (existingActive != null) {
+                    if (DateTimeUtils.isSameDay(existingActive.startTime, now)) {
+                        existingActive.id
+                    } else {
+                        Log.i(TAG, "Sesi aktif (${existingActive.id}) berasal dari hari kemarin. Menutup dan membuat sesi baru untuk hari ini...")
+                        locationRepository.completeSession(existingActive.id)
+                        locationRepository.startNewSession("Jejak ${DateTimeUtils.formatFullDateTime(now)}")
+                    }
+                } else {
+                    locationRepository.startNewSession("Jejak ${DateTimeUtils.formatFullDateTime(now)}")
+                }
             }
 
             activeSessionId = actualSessionId
@@ -116,7 +218,10 @@ class LocationTrackingService : Service() {
             filteredJitterCount = 0
             _jitterCount.value = 0
 
-            // Muat data akumulasi awal jika sesi sudah ada
+            // Simpan status persisten ke SharedPreferences
+            saveSessionState(actualSessionId, isTracking = true, isPaused = false)
+
+            // Muat data akumulasi awal jika sesi sudah ada di database Room
             val existingSession = locationRepository.getSessionByIdSync(actualSessionId)
             if (existingSession != null) {
                 accumulatedDistanceMeters = existingSession.totalDistanceMeters
@@ -173,12 +278,16 @@ class LocationTrackingService : Service() {
 
     private fun pauseTracking() {
         Log.d(TAG, "Pausing location updates")
+        releaseWakeLock()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         motionDetector.stopListening()
         _isTrackingPaused.value = true
 
         val sessionId = activeSessionId
+            ?: getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getLong(KEY_PERSISTED_SESSION_ID, -1L).takeIf { it != -1L }
+
         if (sessionId != null) {
+            saveSessionState(sessionId, isTracking = true, isPaused = true)
             serviceScope.launch {
                 locationRepository.pauseSession(sessionId)
             }
@@ -194,10 +303,14 @@ class LocationTrackingService : Service() {
 
     private fun resumeTracking() {
         Log.d(TAG, "Resuming location updates")
+        acquireWakeLock()
         _isTrackingPaused.value = false
 
         val sessionId = activeSessionId
+            ?: getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getLong(KEY_PERSISTED_SESSION_ID, -1L).takeIf { it != -1L }
+
         if (sessionId != null) {
+            saveSessionState(sessionId, isTracking = true, isPaused = false)
             serviceScope.launch {
                 locationRepository.resumeSession(sessionId)
             }
@@ -220,15 +333,15 @@ class LocationTrackingService : Service() {
 
     private fun stopTracking() {
         Log.d(TAG, "Stopping location service")
+        releaseWakeLock()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         motionDetector.stopListening()
 
         val sessionId = activeSessionId
-        if (sessionId != null) {
-            serviceScope.launch {
-                locationRepository.completeSession(sessionId)
-            }
-        }
+            ?: getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getLong(KEY_PERSISTED_SESSION_ID, -1L).takeIf { it != -1L }
+
+        // Bersihkan preferensi persisten
+        clearSessionState()
 
         _isTrackingRunning.value = false
         _isTrackingPaused.value = false
@@ -242,7 +355,22 @@ class LocationTrackingService : Service() {
         filteredJitterCount = 0
 
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
+
+        // Pastikan completeSession selesai dieksekusi di Room sebelum stopSelf mematikan service
+        if (sessionId != null) {
+            serviceScope.launch(Dispatchers.IO + NonCancellable) {
+                try {
+                    locationRepository.completeSession(sessionId)
+                    Log.d(TAG, "Sesi $sessionId berhasil ditandai COMPLETED di Room")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Gagal menandai sesi $sessionId selesai", e)
+                } finally {
+                    stopSelf()
+                }
+            }
+        } else {
+            stopSelf()
+        }
     }
 
     private fun requestLocationUpdates(state: MotionState) {
@@ -283,16 +411,49 @@ class LocationTrackingService : Service() {
                 locationCallback,
                 Looper.getMainLooper()
             )
-            Log.d(TAG, "Location updates requested for $state: interval=${intervalMs}ms, priority=$priority")
+            Log.d(TAG, "Requested location updates with interval: ${intervalMs}ms, priority: $priority")
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException requesting location updates", e)
+            Log.e(TAG, "SecurityException while requesting location updates", e)
         }
     }
 
     private fun handleNewLocation(location: Location) {
-        val sessionId = activeSessionId ?: return
+        val now = location.time.takeIf { it > 0 } ?: System.currentTimeMillis()
 
         serviceScope.launch {
+            // Pulihkan sessionId dari memory atau preferensi persisten
+            var currentSessionId = activeSessionId
+                ?: getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getLong(KEY_PERSISTED_SESSION_ID, -1L).takeIf { it != -1L }
+
+            if (currentSessionId == null) {
+                val existingActive = locationRepository.getActiveSessionSync()
+                currentSessionId = existingActive?.id ?: locationRepository.startNewSession("Jejak ${DateTimeUtils.formatFullDateTime(now)}")
+                activeSessionId = currentSessionId
+                _currentSessionId.value = currentSessionId
+                saveSessionState(currentSessionId, isTracking = true, isPaused = false)
+            }
+
+            val validSessionId = currentSessionId
+
+            // Auto-Day-Rollover (Midnight boundary):
+            // Jika tanggal sesi berbeda dengan tanggal titik koordinat saat ini, otomatis selesaikan sesi lama
+            val currentSession = locationRepository.getSessionByIdSync(validSessionId)
+            val sessionToUseId: Long = if (currentSession != null && !DateTimeUtils.isSameDay(currentSession.startTime, now)) {
+                Log.i(TAG, "Tanggal berganti (tengah malam). Menyelesaikan sesi ${currentSession.id} dan membuat sesi baru untuk hari ini...")
+                locationRepository.completeSession(currentSession.id)
+                val newSessionId = locationRepository.startNewSession("Jejak ${DateTimeUtils.formatFullDateTime(now)}")
+                activeSessionId = newSessionId
+                _currentSessionId.value = newSessionId
+                saveSessionState(newSessionId, isTracking = true, isPaused = false)
+                accumulatedDistanceMeters = 0.0
+                recordedPointCount = 0
+                lastRecordedLocation = null
+                newSessionId
+            } else {
+                validSessionId
+            }
+
             // 1. Evaluasi Jitter GPS
             val isJitter = GpsJitterFilter.isJitter(location, lastRecordedLocation)
 
@@ -306,13 +467,13 @@ class LocationTrackingService : Service() {
 
                 // Simpan titik dengan penanda isJitter = true (tidak dihitung dalam akumulasi jarak)
                 val jitterPoint = LocationPointEntity(
-                    sessionId = sessionId,
+                    sessionId = sessionToUseId,
                     latitude = location.latitude,
                     longitude = location.longitude,
                     altitude = location.altitude,
                     accuracy = location.accuracy,
                     speed = location.speed,
-                    timestamp = location.time.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                    timestamp = now,
                     isJitter = true
                 )
                 locationRepository.insertLocationPoint(jitterPoint)
@@ -340,24 +501,23 @@ class LocationTrackingService : Service() {
 
             // Simpan titik valid ke Room Database
             val validPoint = LocationPointEntity(
-                sessionId = sessionId,
+                sessionId = sessionToUseId,
                 latitude = location.latitude,
                 longitude = location.longitude,
                 altitude = location.altitude,
                 accuracy = location.accuracy,
                 speed = location.speed,
-                timestamp = location.time.takeIf { it > 0 } ?: System.currentTimeMillis(),
+                timestamp = now,
                 isJitter = false
             )
             locationRepository.insertLocationPoint(validPoint)
 
             // Update sesi di basis data
-            val currentSession = locationRepository.getSessionByIdSync(sessionId)
-            if (currentSession != null) {
-                val now = System.currentTimeMillis()
-                val duration = ((now - currentSession.startTime) / 1000).coerceAtLeast(0)
+            val sessionInDb = locationRepository.getSessionByIdSync(sessionToUseId)
+            if (sessionInDb != null) {
+                val duration = ((now - sessionInDb.startTime) / 1000).coerceAtLeast(0)
                 locationRepository.updateSession(
-                    currentSession.copy(
+                    sessionInDb.copy(
                         pointCount = recordedPointCount,
                         totalDistanceMeters = accumulatedDistanceMeters,
                         totalDurationSeconds = duration
@@ -465,6 +625,7 @@ class LocationTrackingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "LocationTrackingService destroyed")
+        releaseWakeLock()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         motionDetector.stopListening()
         serviceScope.cancel()
@@ -480,6 +641,11 @@ class LocationTrackingService : Service() {
         const val CHANNEL_ID = "trackr_location_channel"
         const val CHANNEL_NAME = "Pelacakan Lokasi Aktif"
         const val NOTIFICATION_ID = 1001
+
+        private const val PREFS_NAME = "trackr_service_prefs"
+        private const val KEY_PERSISTED_SESSION_ID = "persisted_session_id"
+        private const val KEY_PERSISTED_IS_TRACKING = "persisted_is_tracking"
+        private const val KEY_PERSISTED_IS_PAUSED = "persisted_is_paused"
 
         const val ACTION_START = "com.endo.trackr.action.START"
         const val ACTION_PAUSE = "com.endo.trackr.action.PAUSE"

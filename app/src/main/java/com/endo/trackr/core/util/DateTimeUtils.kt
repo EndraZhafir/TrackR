@@ -1,12 +1,13 @@
 package com.endo.trackr.core.util
 
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Utility helper untuk memformat timestamp (epoch millis) dan durasi waktu.
+ * Utility helper untuk memformat timestamp (epoch millis), durasi waktu, dan evaluasi kalender.
  */
 object DateTimeUtils {
 
@@ -58,5 +59,15 @@ object DateTimeUtils {
         } else {
             String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
         }
+    }
+
+    /**
+     * Memeriksa apakah dua epoch timestamp berada pada tanggal kalender yang sama (berdasarkan timezone lokal perangkat).
+     */
+    fun isSameDay(timeA: Long, timeB: Long): Boolean {
+        val calA = Calendar.getInstance().apply { timeInMillis = timeA }
+        val calB = Calendar.getInstance().apply { timeInMillis = timeB }
+        return calA.get(Calendar.YEAR) == calB.get(Calendar.YEAR) &&
+                calA.get(Calendar.DAY_OF_YEAR) == calB.get(Calendar.DAY_OF_YEAR)
     }
 }
