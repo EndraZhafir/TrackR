@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -238,10 +239,10 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
+                            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             item {
-                                Spacer(modifier = Modifier.height(4.dp))
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -322,10 +323,6 @@ fun HomeScreen(
                                 )
                             }
                         }
-
-                        item {
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
                     }
                 }
                 1 -> {
@@ -334,10 +331,10 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
+                        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item {
-                            Spacer(modifier = Modifier.height(4.dp))
                             val unresolvedCount = uiState.stayPoints.count { it.resolvedAddress == null }
                             TimelineHeaderCard(
                                 stayPointCount = uiState.stayPoints.size,
@@ -424,10 +421,10 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
+                        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         item {
-                            Spacer(modifier = Modifier.height(4.dp))
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
