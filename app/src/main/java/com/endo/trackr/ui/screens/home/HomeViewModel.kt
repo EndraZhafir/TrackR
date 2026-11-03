@@ -168,11 +168,19 @@ class HomeViewModel(
 
     fun startTracking(context: Context, customTitle: String? = null) {
         viewModelScope.launch {
+            val now = System.currentTimeMillis()
             val existingActive = locationRepository.getActiveSessionSync()
             val targetSessionId = if (existingActive != null) {
-                existingActive.id
+                if (DateTimeUtils.isSameDay(existingActive.startTime, now)) {
+                    existingActive.id
+                } else {
+                    // Sesi aktif berasal dari hari kemarin/sebelumnya. Selesaikan sesi lama dan mulai sesi baru untuk hari ini
+                    locationRepository.completeSession(existingActive.id)
+                    val title = customTitle ?: "Jejak ${DateTimeUtils.formatFullDateTime(now)}"
+                    locationRepository.startNewSession(title)
+                }
             } else {
-                val title = customTitle ?: "Jejak ${DateTimeUtils.formatFullDateTime(System.currentTimeMillis())}"
+                val title = customTitle ?: "Jejak ${DateTimeUtils.formatFullDateTime(now)}"
                 locationRepository.startNewSession(title)
             }
             LocationTrackingService.startService(context, targetSessionId)
@@ -188,7 +196,13 @@ class HomeViewModel(
     }
 
     fun stopTracking(context: Context) {
-        LocationTrackingService.stopService(context)
+        viewModelScope.launch {
+            val active = locationRepository.getActiveSessionSync()
+            if (active != null) {
+                locationRepository.completeSession(active.id)
+            }
+            LocationTrackingService.stopService(context)
+        }
     }
 
     fun deleteSession(sessionId: Long) {

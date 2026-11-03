@@ -13,6 +13,9 @@
     <!-- Permission for Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- WakeLock untuk menjaga stabilitas background service saat layar mati / Doze Mode -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Permissions for OpenStreetMap (osmdroid) Tiles -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -46,6 +49,7 @@
             android:name=".service.LocationTrackingService"
             android:enabled="true"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="location" />
 
         <!-- FileProvider untuk berbagi berkas ekspor (GPX, KML, GeoJSON) via ShareSheet -->

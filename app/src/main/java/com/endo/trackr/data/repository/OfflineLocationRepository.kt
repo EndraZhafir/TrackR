@@ -1,5 +1,7 @@
 package com.endo.trackr.data.repository
 
+import android.util.Log
+import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.core.util.StayPointDetector
 import com.endo.trackr.data.local.dao.LocationPointDao
 import com.endo.trackr.data.local.dao.StayPointDao
@@ -62,14 +64,35 @@ class OfflineLocationRepository(
     override suspend fun completeSession(sessionId: Long) {
         val session = sessionDao.getSessionByIdSync(sessionId) ?: return
         val now = System.currentTimeMillis()
-        val duration = (now - session.startTime) / 1000
+        val duration = ((now - session.startTime) / 1000).coerceAtLeast(0)
+
+        // Hitung ulang akumulasi jarak dan jumlah titik secara pasti dari Room
+        val points = pointDao.getPointsForSessionSync(sessionId)
+        var totalDist = 0.0
+        val validPoints = points.filter { !it.isJitter }
+        for (i in 0 until validPoints.size - 1) {
+            totalDist += LocationUtils.calculateHaversineDistance(
+                validPoints[i].latitude, validPoints[i].longitude,
+                validPoints[i + 1].latitude, validPoints[i + 1].longitude
+            )
+        }
+
         sessionDao.updateSession(
             session.copy(
                 endTime = now,
                 totalDurationSeconds = duration,
+                pointCount = points.size,
+                totalDistanceMeters = if (totalDist > 0) totalDist else session.totalDistanceMeters,
                 status = TrackingStatus.COMPLETED.name
             )
         )
+
+        // Otomatis ekstrak dan simpan stay points untuk sesi yang baru selesai
+        try {
+            recalculateStayPoints(sessionId)
+        } catch (e: Exception) {
+            Log.e("OfflineLocationRepo", "Gagal mengekstrak stay points saat completeSession ($sessionId)", e)
+        }
     }
 
     override suspend fun deleteSession(sessionId: Long) {
