@@ -26,7 +26,7 @@ enum class MotionState {
  */
 class MotionDetector(
     context: Context,
-    private val stationaryThresholdMillis: Long = 5 * 60 * 1000L // Default 5 menit
+    private val stationaryThresholdMillis: Long = 30 * 1000L // 30 detik (diperbarui dari 5 menit untuk responsivitas)
 ) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -39,11 +39,13 @@ class MotionDetector(
 
     private var lastMotionTimestamp: Long = System.currentTimeMillis()
     private var lastAccelerationMagnitude: Float = 9.8f
-    private val motionThreshold = 0.65f // Ambang deviasi akselerasi yang menandakan pergerakan aktif
+    private val motionThreshold = 1.4f // Ambang deviasi akselerasi dinamis (kebal terhadap getaran tangan ringan saat memegang HP)
+    private val recentGpsDisplacements = ArrayDeque<Pair<Long, Double>>()
 
     fun startListening(listener: (MotionState) -> Unit) {
         onStateChangedListener = listener
         lastMotionTimestamp = System.currentTimeMillis()
+        recentGpsDisplacements.clear()
         currentState = MotionState.MOVING
 
         if (accelerometer != null) {
@@ -57,6 +59,7 @@ class MotionDetector(
 
     fun stopListening() {
         sensorManager.unregisterListener(this)
+        recentGpsDisplacements.clear()
         onStateChangedListener = null
         Log.d(TAG, "Motion detector unregistered")
     }
@@ -64,10 +67,28 @@ class MotionDetector(
     /**
      * Dilaporkan oleh Location Service saat koordinat GPS baru diterima.
      * Jika ada perpindahan nyata (> 15 meter), perbarui timestamp pergerakan terakhir.
+     * Jika 5-6 titik terakhir berturut-turut berada dalam radius sempit (<= 15m) selama >= 25s,
+     * otomatis alihkan ke status STATIONARY bahkan bila accelerometer mendeteksi getaran tangan mikro.
      */
     fun reportGpsDisplacement(displacementMeters: Double) {
+        val now = System.currentTimeMillis()
+        recentGpsDisplacements.addLast(now to displacementMeters)
+        while (recentGpsDisplacements.size > 6) {
+            recentGpsDisplacements.removeFirst()
+        }
+
         if (displacementMeters > 15.0) {
             recordActiveMotion("GPS displacement: ${String.format("%.1f", displacementMeters)}m")
+        } else if (recentGpsDisplacements.size >= 5) {
+            val oldestTime = recentGpsDisplacements.first().first
+            val duration = now - oldestTime
+            val allClustered = recentGpsDisplacements.all { it.second <= 15.0 }
+
+            if (allClustered && duration >= 25 * 1000L && currentState == MotionState.MOVING) {
+                Log.d(TAG, "GPS cluster stationary detected (${recentGpsDisplacements.size} points <= 15m over ${duration / 1000}s). Transitioning to STATIONARY mode.")
+                currentState = MotionState.STATIONARY
+                onStateChangedListener?.invoke(MotionState.STATIONARY)
+            }
         }
     }
 

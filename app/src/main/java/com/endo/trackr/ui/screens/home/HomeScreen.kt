@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.BatterySaver
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.GpsFixed
@@ -54,6 +57,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +74,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,6 +110,20 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    // Evaluasi status optimasi baterai (Doze / Background restriction)
+    val powerManager = remember { context.getSystemService(Context.POWER_SERVICE) as? PowerManager }
+    var showBatteryBanner by rememberSaveable { mutableStateOf(true) }
+    val isIgnoringBattery = remember(showBatteryBanner) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+        } else true
+    }
+
+    // Pengelompokan sesi tersimpan berdasarkan kategori tanggal (Hari Ini, Kemarin, dll.)
+    val groupedSessions = remember(uiState.sessions) {
+        uiState.sessions.groupBy { DateTimeUtils.getDateCategory(it.startTime) }
+    }
 
     // Konfigurasi Izin Runtime (Location & Notification untuk Android 13+)
     val requiredPermissions = remember {
@@ -160,7 +181,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Modul 8: Heatmap & Statistik Jarak (Haversine)",
+                            text = "Lightweight GPS Logger & Timeline",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -169,8 +190,8 @@ fun HomeScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            if (uiState.activePoints.isEmpty()) {
-                                Toast.makeText(context, "Belum ada titik jejak untuk diekspor", Toast.LENGTH_SHORT).show()
+                            if (uiState.activePoints.isEmpty() && uiState.sessions.isEmpty()) {
+                                Toast.makeText(context, "Belum ada riwayat jejak tersimpan untuk diekspor", Toast.LENGTH_SHORT).show()
                             } else {
                                 viewModel.openExportDialog()
                             }
@@ -242,6 +263,81 @@ fun HomeScreen(
                             contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            // Banner Panduan Anti-Sleep / Background Restriction (ColorOS / MIUI)
+                            if (!isIgnoringBattery && showBatteryBanner) {
+                                item {
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.9f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.BatterySaver,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "Pencegahan Sleep / Kill Background",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "Agar perekaman rute di latar belakang tidak dimatikan paksa oleh sistem (terutama di HP OPPO/ColorOS), izinkan TrackR mengabaikan optimasi baterai.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                FilledTonalButton(
+                                                    onClick = {
+                                                        try {
+                                                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                                data = Uri.parse("package:${context.packageName}")
+                                                            }
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            try {
+                                                                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                                                context.startActivity(fallback)
+                                                            } catch (e2: Exception) {
+                                                                Toast.makeText(context, "Buka Pengaturan > Baterai > TrackR untuk mematikan optimasi baterai", Toast.LENGTH_LONG).show()
+                                                            }
+                                                        }
+                                                    },
+                                                    modifier = Modifier.height(32.dp),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text("Atur Izin Baterai", style = MaterialTheme.typography.labelSmall)
+                                                }
+                                            }
+                                            IconButton(
+                                                onClick = { showBatteryBanner = false },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Tutup Peringatan",
+                                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             item {
                                 Card(
                                     modifier = Modifier
@@ -282,9 +378,7 @@ fun HomeScreen(
                                 },
                                 onPauseClick = { viewModel.pauseTracking(context) },
                                 onResumeClick = { viewModel.resumeTracking(context) },
-                                onStopClick = { viewModel.stopTracking(context) },
-                                onToggleMotionClick = { viewModel.toggleSimulatedMotionState(context) },
-                                onSimulateJitterClick = { viewModel.insertSimulatedJitterPoint() }
+                                onStopClick = { viewModel.stopTracking(context) }
                             )
                         }
 
@@ -313,14 +407,43 @@ fun HomeScreen(
                                 }
                             }
                         } else {
-                            items(
-                                items = uiState.sessions,
-                                key = { it.id }
-                            ) { session ->
-                                SessionHistoryCard(
-                                    session = session,
-                                    onDelete = { viewModel.deleteSession(session.id) }
-                                )
+                            groupedSessions.forEach { (category, sessionList) ->
+                                item(key = "header_$category") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 10.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = category,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        HorizontalDivider(
+                                            modifier = Modifier.weight(1f),
+                                            color = MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                    }
+                                }
+                                items(
+                                    items = sessionList,
+                                    key = { it.id }
+                                ) { session ->
+                                    SessionHistoryCard(
+                                        session = session,
+                                        onExport = { viewModel.openExportDialogForSession(session.id) },
+                                        onDelete = { viewModel.deleteSession(session.id) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -341,10 +464,6 @@ fun HomeScreen(
                                 totalPointCount = uiState.totalPointCount,
                                 unresolvedCount = unresolvedCount,
                                 isBatchGeocoding = uiState.isBatchGeocoding,
-                                onGenerateDemo = {
-                                    viewModel.generateSimulatedTimelineSession()
-                                    Toast.makeText(context, "Sesi simulasi perjalanan & singgah dibuat!", Toast.LENGTH_SHORT).show()
-                                },
                                 onRecluster = {
                                     viewModel.extractStayPointsNow(thresholdMinutes = 5)
                                     Toast.makeText(context, "Stay points diekstrak ulang!", Toast.LENGTH_SHORT).show()
@@ -513,10 +632,6 @@ fun HomeScreen(
                                 }
                             }
                         }
-
-                        item {
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
                     }
                 }
             }
@@ -526,10 +641,15 @@ fun HomeScreen(
 
     // Modal Dialog Ekspor Data GIS (GPX / KML / GeoJSON)
     if (uiState.exportDialogState.isVisible) {
+        val exportState = uiState.exportDialogState
+        val exportTitle = if (exportState.targetPoints.isNotEmpty()) exportState.targetTitle else (uiState.activeSession?.title ?: "Jejak TrackR")
+        val exportPointsCount = if (exportState.targetPoints.isNotEmpty()) exportState.targetPoints.size else uiState.totalPointCount
+        val exportStayPointsCount = if (exportState.targetPoints.isNotEmpty()) exportState.targetStayPoints.size else uiState.stayPoints.size
+
         ExportDialog(
-            sessionTitle = uiState.activeSession?.title ?: "Jejak TrackR",
-            totalPoints = uiState.totalPointCount,
-            stayPointsCount = uiState.stayPoints.size,
+            sessionTitle = exportTitle,
+            totalPoints = exportPointsCount,
+            stayPointsCount = exportStayPointsCount,
             selectedFormat = uiState.exportDialogState.selectedFormat,
             includeStayPoints = uiState.exportDialogState.includeStayPoints,
             filterJitter = uiState.exportDialogState.filterJitter,
@@ -560,7 +680,6 @@ private fun TimelineHeaderCard(
     totalPointCount: Int,
     unresolvedCount: Int,
     isBatchGeocoding: Boolean,
-    onGenerateDemo: () -> Unit,
     onRecluster: () -> Unit,
     onResolveAllAddresses: () -> Unit,
     onExportClick: () -> Unit
@@ -591,27 +710,13 @@ private fun TimelineHeaderCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            OutlinedButton(
+                onClick = onRecluster,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
-                    onClick = onGenerateDemo,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = Icons.Default.AutoGraph, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Simulasi Demo")
-                }
-
-                OutlinedButton(
-                    onClick = onRecluster,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ekstrak Ulang")
-                }
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Ekstrak Ulang Titik Singgah")
             }
 
             if (unresolvedCount > 0) {
@@ -668,9 +773,7 @@ private fun TrackingControlCard(
     onStartClick: () -> Unit,
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
-    onStopClick: () -> Unit,
-    onToggleMotionClick: () -> Unit,
-    onSimulateJitterClick: () -> Unit
+    onStopClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -851,33 +954,6 @@ private fun TrackingControlCard(
                             )
                         }
                     }
-
-                    // Baris Tombol Uji Coba Pengujian Fitur
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onToggleMotionClick,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = if (motionState == MotionState.MOVING) "Simulasi Diam" else "Simulasi Bergerak",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = onSimulateJitterClick,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = "Tes Jitter (+1)",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
@@ -982,6 +1058,7 @@ private fun MetricItem(
 @Composable
 private fun SessionHistoryCard(
     session: TrackingSessionEntity,
+    onExport: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -1026,12 +1103,21 @@ private fun SessionHistoryCard(
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Hapus Sesi",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onExport) {
+                    Icon(
+                        imageVector = Icons.Default.FileDownload,
+                        contentDescription = "Ekspor Sesi Ini (GPX/KML/GeoJSON)",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Hapus Sesi",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
