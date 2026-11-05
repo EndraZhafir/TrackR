@@ -17,6 +17,9 @@ import com.endo.trackr.data.exporter.ExportFormat
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
+import com.endo.trackr.data.model.FuelProfile
+import com.endo.trackr.data.repository.FuelPreferencesRepository
+import java.util.UUID
 import com.endo.trackr.data.repository.GeocodingRepository
 import com.endo.trackr.data.repository.LocationRepository
 import com.endo.trackr.service.LocationTrackingService
@@ -68,6 +71,12 @@ data class HomeUiState(
     val statsPoints: List<LocationPointEntity> = emptyList(),
     val statsStayPoints: List<StayPointEntity> = emptyList(),
     val showStatsHeatmap: Boolean = true,
+    val fuelProfiles: List<FuelProfile> = emptyList(),
+    val selectedFuelProfile: FuelProfile? = null,
+    val idleConsumptionRate: Double = 0.18,
+    val isFuelSettingsOpen: Boolean = false,
+    val isFuelFormOpen: Boolean = false,
+    val fuelProfileToEdit: FuelProfile? = null,
     val isLoading: Boolean = false
 )
 
@@ -79,7 +88,8 @@ data class HomeUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     private val locationRepository: LocationRepository,
-    private val geocodingRepository: GeocodingRepository
+    private val geocodingRepository: GeocodingRepository,
+    private val fuelPreferencesRepository: FuelPreferencesRepository
 ) : ViewModel() {
 
     private val activeSessionFlow = locationRepository.getActiveSession()
@@ -110,6 +120,21 @@ class HomeViewModel(
     private val _selectedStatsRange = MutableStateFlow(StatsTimeRange.ALL_TIME)
     private val _showStatsHeatmap = MutableStateFlow(true)
 
+    private val _isFuelSettingsOpen = MutableStateFlow(false)
+    private val _isFuelFormOpen = MutableStateFlow(false)
+    private val _fuelProfileToEdit = MutableStateFlow<FuelProfile?>(null)
+
+    private val fuelFlow = combine(
+        fuelPreferencesRepository.fuelProfilesFlow,
+        fuelPreferencesRepository.selectedProfileFlow,
+        fuelPreferencesRepository.idleRateFlow,
+        combine(_isFuelSettingsOpen, _isFuelFormOpen, _fuelProfileToEdit) { isSettings, isForm, toEdit ->
+            Triple(isSettings, isForm, toEdit)
+        }
+    ) { profiles, selectedProfile, idleRate, (isSettings, isForm, toEdit) ->
+        FuelBundle(profiles, selectedProfile, idleRate, isSettings, isForm, toEdit)
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         combine(activeSessionFlow, allSessionsFlow, activePointsFlow, stayPointsFlow) { activeSession, sessions, activePoints, stayPoints ->
             Quintuple(activeSession, sessions, activePoints, stayPoints, Unit)
@@ -127,8 +152,9 @@ class HomeViewModel(
         },
         combine(allValidPointsFlow, allStayPointsFlow, _selectedStatsRange, _showStatsHeatmap) { allValid, allStay, statsRange, showHeatmap ->
             Quad(allValid, allStay, statsRange, showHeatmap)
-        }
-    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState), (allValid, allStay, statsRange, showHeatmap) ->
+        },
+        fuelFlow
+    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState), (allValid, allStay, statsRange, showHeatmap), fuelBundle ->
         val segments = StayPointDetector.buildTimelineSegments(activePoints, stayPoints)
 
         val statsThreshold = StatsCalculator.getStartTimestampForRange(statsRange)
@@ -139,7 +165,9 @@ class HomeViewModel(
             range = statsRange,
             sessions = sessions,
             points = allValid,
-            stayPoints = allStay
+            stayPoints = allStay,
+            activeFuelProfile = fuelBundle.selectedProfile,
+            idleRateLitersPerHour = fuelBundle.idleRate
         )
 
         HomeUiState(
@@ -162,6 +190,12 @@ class HomeViewModel(
             statsPoints = filteredStatsPoints,
             statsStayPoints = filteredStatsStayPoints,
             showStatsHeatmap = showHeatmap,
+            fuelProfiles = fuelBundle.profiles,
+            selectedFuelProfile = fuelBundle.selectedProfile,
+            idleConsumptionRate = fuelBundle.idleRate,
+            isFuelSettingsOpen = fuelBundle.isSettingsOpen,
+            isFuelFormOpen = fuelBundle.isFormOpen,
+            fuelProfileToEdit = fuelBundle.profileToEdit,
             isLoading = false
         )
     }.stateIn(
@@ -406,6 +440,55 @@ class HomeViewModel(
         _showStatsHeatmap.value = !_showStatsHeatmap.value
     }
 
+    fun openFuelSettings() {
+        _isFuelSettingsOpen.value = true
+    }
+
+    fun closeFuelSettings() {
+        _isFuelSettingsOpen.value = false
+    }
+
+    fun openFuelForm(profileToEdit: FuelProfile? = null) {
+        _fuelProfileToEdit.value = profileToEdit
+        _isFuelFormOpen.value = true
+    }
+
+    fun closeFuelForm() {
+        _isFuelFormOpen.value = false
+        _fuelProfileToEdit.value = null
+    }
+
+    fun saveFuelProfile(name: String, price: Double, efficiency: Double, profileId: String? = null) {
+        viewModelScope.launch {
+            val profile = FuelProfile(
+                id = profileId ?: UUID.randomUUID().toString(),
+                name = name,
+                pricePerLiter = price,
+                efficiencyKmL = efficiency
+            )
+            fuelPreferencesRepository.saveProfile(profile)
+            closeFuelForm()
+        }
+    }
+
+    fun deleteFuelProfile(profileId: String) {
+        viewModelScope.launch {
+            fuelPreferencesRepository.deleteProfile(profileId)
+        }
+    }
+
+    fun selectFuelProfile(profileId: String?) {
+        viewModelScope.launch {
+            fuelPreferencesRepository.selectProfile(profileId)
+        }
+    }
+
+    fun updateIdleConsumptionRate(rate: Double) {
+        viewModelScope.launch {
+            fuelPreferencesRepository.setIdleConsumptionRate(rate)
+        }
+    }
+
     /**
      * Menghasilkan data sesi simulasi harian realistis:
      * - Titik Singgah 1 (Monas): Singgah 25 menit (30 titik cluster)
@@ -515,6 +598,15 @@ private data class Quad<A, B, C, D>(
 /**
  * Data holder helper untuk de-structuring 5 elemen.
  */
+private data class FuelBundle(
+    val profiles: List<FuelProfile>,
+    val selectedProfile: FuelProfile?,
+    val idleRate: Double,
+    val isSettingsOpen: Boolean,
+    val isFormOpen: Boolean,
+    val profileToEdit: FuelProfile?
+)
+
 private data class Quintuple<A, B, C, D, E>(
     val first: A,
     val second: B,
