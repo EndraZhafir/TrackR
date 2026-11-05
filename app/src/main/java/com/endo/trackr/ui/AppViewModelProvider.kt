@@ -16,7 +16,8 @@ object AppViewModelProvider {
         initializer {
             HomeViewModel(
                 locationRepository = trackRApplication().container.locationRepository,
-                geocodingRepository = trackRApplication().container.geocodingRepository
+                geocodingRepository = trackRApplication().container.geocodingRepository,
+                fuelPreferencesRepository = trackRApplication().container.fuelPreferencesRepository
             )
         }
     }

@@ -99,7 +99,10 @@ import com.endo.trackr.data.local.entity.TrackingSessionEntity
 import com.endo.trackr.data.local.entity.TrackingStatus
 import com.endo.trackr.service.motion.MotionState
 import com.endo.trackr.ui.AppViewModelProvider
+import androidx.compose.material.icons.filled.Settings
 import com.endo.trackr.ui.components.ExportDialog
+import com.endo.trackr.ui.components.FuelFormDialog
+import com.endo.trackr.ui.components.FuelSettingsDialog
 import com.endo.trackr.ui.components.OsmMapView
 import com.endo.trackr.ui.components.StatsMetricsGrid
 import com.endo.trackr.ui.components.TimeRangeSelector
@@ -210,6 +213,14 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.openFuelSettings() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Pengaturan Bahan Bakar"
+                        )
+                    }
                     IconButton(
                         onClick = {
                             if (uiState.activePoints.isEmpty() && uiState.sessions.isEmpty()) {
@@ -623,7 +634,7 @@ fun HomeScreen(
                         }
 
                         item {
-                            StatsMetricsGrid(stats = uiState.statsSummary)
+                            StatsMetricsGrid(stats = uiState.statsSummary, onOpenFuelSettings = { viewModel.openFuelSettings() })
                         }
 
                         item {
@@ -718,6 +729,30 @@ fun HomeScreen(
             onDismissRequest = { viewModel.closeExportDialog() }
         )
     }
+
+    // Dialog Pengaturan Bahan Bakar & Kendaraan
+    FuelSettingsDialog(
+        isVisible = uiState.isFuelSettingsOpen,
+        profiles = uiState.fuelProfiles,
+        selectedProfileId = uiState.selectedFuelProfile?.id,
+        idleRate = uiState.idleConsumptionRate,
+        onSelectProfile = { viewModel.selectFuelProfile(it) },
+        onEditProfile = { viewModel.openFuelForm(it) },
+        onDeleteProfile = { viewModel.deleteFuelProfile(it) },
+        onAddProfileClick = { viewModel.openFuelForm(null) },
+        onUpdateIdleRate = { viewModel.updateIdleConsumptionRate(it) },
+        onDismiss = { viewModel.closeFuelSettings() }
+    )
+
+    // Form Tambah / Edit Profil Bahan Bakar
+    FuelFormDialog(
+        isVisible = uiState.isFuelFormOpen,
+        profileToEdit = uiState.fuelProfileToEdit,
+        onSave = { name, price, efficiency, id ->
+            viewModel.saveFuelProfile(name, price, efficiency, id)
+        },
+        onDismiss = { viewModel.closeFuelForm() }
+    )
 }
 
 @Composable

@@ -1,6 +1,7 @@
 package com.endo.trackr.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,20 +15,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.ElectricBolt
+import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -54,10 +58,11 @@ fun MetricCard(
     icon: ImageVector,
     iconTint: Color,
     containerColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier,
+        modifier = if (onClick != null) modifier.clickable { onClick() } else modifier,
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
@@ -109,12 +114,14 @@ fun MetricCard(
 }
 
 /**
- * Grid lengkap metrik analitik perjalanan (Jarak Haversine, Durasi, Kecepatan, Titik Singgah).
+ * Grid lengkap metrik analitik perjalanan (Jarak Haversine, Durasi, Kecepatan, Titik Singgah,
+ * serta Estimasi Konsumsi BBM dan Pengeluaran Biaya).
  */
 @Composable
 fun StatsMetricsGrid(
     stats: TravelStatsSummary,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenFuelSettings: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -196,6 +203,112 @@ fun StatsMetricsGrid(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.weight(1f)
             )
+        }
+
+        // Baris 4: Estimasi Konsumsi BBM & Pengeluaran Biaya
+        val activeProfile = stats.activeFuelProfile
+        if (activeProfile != null && stats.totalFuelLiters != null && stats.totalFuelCost != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MetricCard(
+                    title = "Estimasi BBM",
+                    value = String.format(Locale.getDefault(), "%.2f Liter", stats.totalFuelLiters),
+                    subtitle = String.format(
+                        Locale.getDefault(),
+                        "Laju: %.2fL • Idle: %.2fL",
+                        stats.movingFuelLiters ?: 0.0,
+                        stats.idleFuelLiters ?: 0.0
+                    ),
+                    icon = Icons.Default.LocalGasStation,
+                    iconTint = Color(0xFF00897B),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenFuelSettings
+                )
+
+                MetricCard(
+                    title = "Estimasi Biaya",
+                    value = String.format(Locale.getDefault(), "Rp %,.0f", stats.totalFuelCost).replace(',', '.'),
+                    subtitle = "${activeProfile.name} @ Rp ${String.format(Locale.getDefault(), "%,.0f", activeProfile.pricePerLiter).replace(',', '.')}",
+                    icon = Icons.Default.Payments,
+                    iconTint = Color(0xFFE65100),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenFuelSettings
+                )
+            }
+        } else {
+            // Empty State: Tidak ada profil bahan bakar yang aktif
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalGasStation,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = "Estimasi Biaya BBM Dinonaktifkan",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Belum ada jenis bensin aktif di tabel data.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+
+                    if (onOpenFuelSettings != null) {
+                        FilledTonalButton(
+                            onClick = onOpenFuelSettings,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Atur BBM", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
         }
     }
 }

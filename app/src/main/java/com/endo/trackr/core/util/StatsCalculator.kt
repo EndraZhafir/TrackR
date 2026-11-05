@@ -3,6 +3,8 @@ package com.endo.trackr.core.util
 import com.endo.trackr.data.local.entity.LocationPointEntity
 import com.endo.trackr.data.local.entity.StayPointEntity
 import com.endo.trackr.data.local.entity.TrackingSessionEntity
+import com.endo.trackr.data.model.FuelProfile
+import com.endo.trackr.data.repository.DefaultFuelPreferencesRepository
 import java.util.Calendar
 
 /**
@@ -16,7 +18,8 @@ enum class StatsTimeRange(val displayName: String) {
 }
 
 /**
- * Ringkasan metrik statistik hasil kalkulasi rumus Haversine dan data sensor GPS.
+ * Ringkasan metrik statistik hasil kalkulasi rumus Haversine, data sensor GPS,
+ * dan estimasi konsumsi serta biaya bahan bakar (BBM).
  */
 data class TravelStatsSummary(
     val timeRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
@@ -26,11 +29,19 @@ data class TravelStatsSummary(
     val maxSpeedKmh: Float = 0f,
     val totalPointsCount: Int = 0,
     val stayPointsCount: Int = 0,
-    val totalSessionsCount: Int = 0
+    val totalSessionsCount: Int = 0,
+    // Estimasi Bahan Bakar & Biaya Perjalanan (Null jika tidak ada profil aktif)
+    val idleDurationSeconds: Long = 0L,
+    val movingDurationSeconds: Long = 0L,
+    val activeFuelProfile: FuelProfile? = null,
+    val movingFuelLiters: Double? = null,
+    val idleFuelLiters: Double? = null,
+    val totalFuelLiters: Double? = null,
+    val totalFuelCost: Double? = null
 )
 
 /**
- * Mesin kalkulasi statistik analitik perjalanan pengguna.
+ * Mesin kalkulasi statistik analitik perjalanan pengguna dan estimasi konsumsi BBM.
  */
 object StatsCalculator {
 
@@ -56,13 +67,16 @@ object StatsCalculator {
     }
 
     /**
-     * Mengagregasi metrik jarak Haversine, durasi, kecepatan, dan titik singgah.
+     * Mengagregasi metrik jarak Haversine, durasi, kecepatan, titik singgah,
+     * serta konsumsi dan estimasi biaya bahan bakar (jika profil aktif tersedia).
      */
     fun calculate(
         range: StatsTimeRange,
         sessions: List<TrackingSessionEntity>,
         points: List<LocationPointEntity>,
         stayPoints: List<StayPointEntity>,
+        activeFuelProfile: FuelProfile? = null,
+        idleRateLitersPerHour: Double = DefaultFuelPreferencesRepository.DEFAULT_IDLE_RATE_LITERS_PER_HOUR,
         now: Long = System.currentTimeMillis()
     ): TravelStatsSummary {
         val startThreshold = getStartTimestampForRange(range, now)
@@ -71,16 +85,30 @@ object StatsCalculator {
         val filteredPoints = points.filter { it.timestamp >= startThreshold && !it.isJitter }
         val filteredStayPoints = stayPoints.filter { it.arrivalTime >= startThreshold }
 
-        // 1. Hitung Total Jarak (Haversine akumulatif per sesi perjalanan)
+        // 1. Hitung Total Jarak (Haversine akumulatif per sesi perjalanan) & Akumulasi Idle Interval
         var totalDistanceMeters = 0.0
+        var totalIdleSeconds = 0L
         val pointsBySession = filteredPoints.groupBy { it.sessionId }
+
         for ((_, sessionPoints) in pointsBySession) {
             val sorted = sessionPoints.sortedBy { it.timestamp }
             for (i in 0 until sorted.size - 1) {
-                totalDistanceMeters += LocationUtils.calculateHaversineDistance(
-                    sorted[i].latitude, sorted[i].longitude,
-                    sorted[i + 1].latitude, sorted[i + 1].longitude
+                val p1 = sorted[i]
+                val p2 = sorted[i + 1]
+                val dist = LocationUtils.calculateHaversineDistance(
+                    p1.latitude, p1.longitude,
+                    p2.latitude, p2.longitude
                 )
+                totalDistanceMeters += dist
+
+                val dt = (p2.timestamp - p1.timestamp) / 1000
+                if (dt in 1..7200) {
+                    val speedKmh = if (dt > 0) (dist / dt) * 3.6 else 0.0
+                    // Kecepatan < 3 km/jam diklasifikasikan sebagai idle (lampu merah, macet, atau diam)
+                    if (speedKmh < 3.0 || (p2.speed * 3.6f) < 3.0f) {
+                        totalIdleSeconds += dt
+                    }
+                }
             }
         }
 
@@ -100,6 +128,10 @@ object StatsCalculator {
             totalDurationSeconds += sessionDuration
         }
 
+        // Pastikan totalIdleSeconds tidak melebihi totalDurationSeconds
+        val clampedIdleSeconds = totalIdleSeconds.coerceAtMost(totalDurationSeconds)
+        val movingDurationSeconds = (totalDurationSeconds - clampedIdleSeconds).coerceAtLeast(0L)
+
         // 3. Hitung Kecepatan Rata-rata (km/jam)
         val averageSpeedKmh = if (totalDurationSeconds > 0 && totalDistanceMeters > 0) {
             val totalDistanceKm = (totalDistanceMeters / 1000.0).toFloat()
@@ -113,6 +145,23 @@ object StatsCalculator {
         val maxSpeedMps = filteredPoints.map { it.speed }.filter { (it * 3.6f) < 180f }.maxOrNull() ?: 0f
         val maxSpeedKmh = maxSpeedMps * 3.6f
 
+        // 5. Hitung Estimasi Konsumsi dan Biaya BBM (Hanya jika profil aktif ada)
+        val (movingFuelLiters, idleFuelLiters, totalFuelLiters, totalFuelCost) = if (activeFuelProfile != null) {
+            val totalDistanceKm = totalDistanceMeters / 1000.0
+            val movingL = if (activeFuelProfile.efficiencyKmL > 0.0) {
+                totalDistanceKm / activeFuelProfile.efficiencyKmL
+            } else 0.0
+
+            val idleHours = clampedIdleSeconds.toDouble() / 3600.0
+            val idleL = idleHours * (if (idleRateLitersPerHour >= 0.0) idleRateLitersPerHour else 0.0)
+
+            val totalL = movingL + idleL
+            val cost = totalL * activeFuelProfile.pricePerLiter
+            Quad(movingL, idleL, totalL, cost)
+        } else {
+            Quad(null, null, null, null)
+        }
+
         return TravelStatsSummary(
             timeRange = range,
             totalDistanceMeters = totalDistanceMeters,
@@ -121,7 +170,16 @@ object StatsCalculator {
             maxSpeedKmh = maxSpeedKmh,
             totalPointsCount = filteredPoints.size,
             stayPointsCount = filteredStayPoints.size,
-            totalSessionsCount = filteredSessions.size
+            totalSessionsCount = filteredSessions.size,
+            idleDurationSeconds = clampedIdleSeconds,
+            movingDurationSeconds = movingDurationSeconds,
+            activeFuelProfile = activeFuelProfile,
+            movingFuelLiters = movingFuelLiters,
+            idleFuelLiters = idleFuelLiters,
+            totalFuelLiters = totalFuelLiters,
+            totalFuelCost = totalFuelCost
         )
     }
+
+    private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 }
