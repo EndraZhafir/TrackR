@@ -138,21 +138,21 @@ data class HistoryDateFilter(
             DateFilterType.ALL_TIME -> context.getString(R.string.stats_range_all_time)
             DateFilterType.SPECIFIC_DATE -> {
                 val date = specificDateMillis?.let { DateTimeUtils.formatDateOnly(it) } ?: ""
-                "📅 $date"
+                "$date"
             }
             DateFilterType.DATE_RANGE -> {
                 val startSdf = SimpleDateFormat("dd MMM", Locale.getDefault())
                 val endSdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
                 val start = rangeStartMillis?.let { startSdf.format(Date(it)) } ?: ""
                 val end = rangeEndMillis?.let { endSdf.format(Date(it)) } ?: ""
-                "📅 $start - $end"
+                "$start - $end"
             }
             DateFilterType.MONTH_YEAR -> {
                 val cal = Calendar.getInstance()
                 cal.set(Calendar.YEAR, selectedYear ?: cal.get(Calendar.YEAR))
                 cal.set(Calendar.MONTH, selectedMonth ?: cal.get(Calendar.MONTH))
                 val label = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(cal.time)
-                "📅 $label"
+                "$label"
             }
         }
     }

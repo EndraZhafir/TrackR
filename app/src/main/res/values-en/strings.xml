@@ -157,4 +157,6 @@
     <string name="filter_range_select_start">Select range start date</string>
     <string name="filter_range_start_fmt">Start: %s • Select end date</string>
     <string name="filter_range_days_fmt">%d days</string>
+    <string name="filter_single_selected_fmt">Selected: %s</string>
+    <string name="filter_single_select_prompt">Select a specific date</string>
 </resources>

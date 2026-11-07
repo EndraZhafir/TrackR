@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -36,7 +35,6 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,7 +61,7 @@ import java.util.Locale
 
 /**
  * Dialog interaktif untuk memilih filter tanggal kustom:
- * 1. Tanggal Spesifik (Single Date via DatePicker)
+ * 1. Tanggal Spesifik (Single Date dengan kalender bulanan paged berdesain seragam & halus)
  * 2. Rentang Tanggal (Date Range berbasis kalender bulanan dengan panah navigasi bulan tanpa stutter)
  * 3. Bulan & Tahun (Mulai dari 2026 dan bertambah dinamis di tahun-tahun mendatang)
  */
@@ -94,28 +92,38 @@ fun DateFilterDialog(
         (appStartYear..maxOf(appStartYear, currentYear)).toList()
     }
 
-    // State untuk Tab 0: Tanggal Spesifik (Mulai dari 2026)
-    val initialDateMillis = currentFilter.specificDateMillis ?: System.currentTimeMillis()
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = initialDateMillis,
-        yearRange = appStartYear..maxOf(appStartYear, currentYear)
-    )
+    // State untuk Tab 0: Tanggal Spesifik (Desain Kalender Bulanan Paged)
+    var singleSelectedDateMillis by remember {
+        mutableStateOf(currentFilter.specificDateMillis ?: System.currentTimeMillis())
+    }
+    val singleDisplayCal = remember {
+        Calendar.getInstance().apply {
+            timeInMillis = currentFilter.specificDateMillis ?: System.currentTimeMillis()
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+    }
+    var singleDisplayedYear by remember {
+        mutableIntStateOf(maxOf(appStartYear, singleDisplayCal.get(Calendar.YEAR)))
+    }
+    var singleDisplayedMonth by remember {
+        mutableIntStateOf(singleDisplayCal.get(Calendar.MONTH))
+    }
 
     // State untuk Tab 1: Rentang Tanggal (Kalender Bulanan Paged dengan Panah)
     var rangeStartMillis by remember { mutableStateOf(currentFilter.rangeStartMillis) }
     var rangeEndMillis by remember { mutableStateOf(currentFilter.rangeEndMillis) }
 
-    val initialDisplayCal = remember {
+    val rangeDisplayCal = remember {
         Calendar.getInstance().apply {
             timeInMillis = currentFilter.rangeStartMillis ?: System.currentTimeMillis()
             set(Calendar.DAY_OF_MONTH, 1)
         }
     }
     var rangeDisplayedYear by remember {
-        mutableIntStateOf(maxOf(appStartYear, initialDisplayCal.get(Calendar.YEAR)))
+        mutableIntStateOf(maxOf(appStartYear, rangeDisplayCal.get(Calendar.YEAR)))
     }
     var rangeDisplayedMonth by remember {
-        mutableIntStateOf(initialDisplayCal.get(Calendar.MONTH))
+        mutableIntStateOf(rangeDisplayCal.get(Calendar.MONTH))
     }
 
     // State untuk Tab 2: Bulan & Tahun (Pilihan tahun mulai dari 2026 saja)
@@ -228,18 +236,48 @@ fun DateFilterDialog(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     when (selectedTabIndex) {
                         0 -> {
-                            // Mode 1: Tanggal Spesifik (DatePicker bawaan Material 3)
-                            DatePicker(
-                                state = datePickerState,
-                                modifier = Modifier.fillMaxWidth(),
-                                title = null,
-                                showModeToggle = false
-                            )
+                            // Mode 1: Tanggal Spesifik (Kalender Bulanan Paged dengan Desain Seragam)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                SingleDateSummaryBanner(selectedDateMillis = singleSelectedDateMillis)
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                PagedMonthCalendar(
+                                    displayedYear = singleDisplayedYear,
+                                    displayedMonth = singleDisplayedMonth,
+                                    monthNames = monthNames,
+                                    shortWeekdays = shortWeekdays,
+                                    selectedStartMillis = singleSelectedDateMillis,
+                                    selectedEndMillis = null,
+                                    isRangeMode = false,
+                                    minYear = appStartYear,
+                                    onPreviousMonth = {
+                                        if (singleDisplayedMonth == 0) {
+                                            if (singleDisplayedYear > appStartYear) {
+                                                singleDisplayedMonth = 11
+                                                singleDisplayedYear--
+                                            }
+                                        } else {
+                                            singleDisplayedMonth--
+                                        }
+                                    },
+                                    onNextMonth = {
+                                        if (singleDisplayedMonth == 11) {
+                                            singleDisplayedMonth = 0
+                                            singleDisplayedYear++
+                                        } else {
+                                            singleDisplayedMonth++
+                                        }
+                                    },
+                                    onDayClicked = { clickedMillis ->
+                                        singleSelectedDateMillis = clickedMillis
+                                    }
+                                )
+                            }
                         }
                         1 -> {
                             // Mode 2: Rentang Tanggal (Kalender Bulanan Paged dengan Panah Navigasi)
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                // Banner Info Rentang Terpilih
                                 RangeSummaryBanner(
                                     rangeStartMillis = rangeStartMillis,
                                     rangeEndMillis = rangeEndMillis,
@@ -251,14 +289,14 @@ fun DateFilterDialog(
 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                // Tampilan Kalender 1 Bulan dengan Tombol Navigasi Panah [<] [>]
-                                PagedMonthRangeCalendar(
+                                PagedMonthCalendar(
                                     displayedYear = rangeDisplayedYear,
                                     displayedMonth = rangeDisplayedMonth,
                                     monthNames = monthNames,
                                     shortWeekdays = shortWeekdays,
-                                    rangeStartMillis = rangeStartMillis,
-                                    rangeEndMillis = rangeEndMillis,
+                                    selectedStartMillis = rangeStartMillis,
+                                    selectedEndMillis = rangeEndMillis,
+                                    isRangeMode = true,
                                     minYear = appStartYear,
                                     onPreviousMonth = {
                                         if (rangeDisplayedMonth == 0) {
@@ -290,7 +328,6 @@ fun DateFilterDialog(
                                                 rangeEndMillis = clickedMillis
                                             }
                                         } else {
-                                            // Sudah ada start dan end, mulai pemilihan baru dengan tanggal yang diklik
                                             rangeStartMillis = clickedMillis
                                             rangeEndMillis = null
                                         }
@@ -436,7 +473,7 @@ fun DateFilterDialog(
                                 0 -> {
                                     HistoryDateFilter(
                                         type = DateFilterType.SPECIFIC_DATE,
-                                        specificDateMillis = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                                        specificDateMillis = singleSelectedDateMillis
                                     )
                                 }
                                 1 -> {
@@ -466,6 +503,43 @@ fun DateFilterDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Banner status pemilihan satu tanggal spesifik.
+ */
+@Composable
+private fun SingleDateSummaryBanner(selectedDateMillis: Long?) {
+    val dateFormat = remember { SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()) }
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val bannerText = if (selectedDateMillis != null) {
+                val s = dateFormat.format(Date(selectedDateMillis))
+                stringResource(R.string.filter_single_selected_fmt, s)
+            } else {
+                stringResource(R.string.filter_single_select_prompt)
+            }
+
+            Text(
+                text = bannerText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (selectedDateMillis != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
         }
     }
 }
@@ -540,17 +614,18 @@ private fun RangeSummaryBanner(
 }
 
 /**
- * Komponen kalender rentang tanggal per-bulan dengan panah navigasi [<] dan [>].
- * Bebas stutter karena hanya merender 1 bulan aktif tanpa LazyColumn tak terhingga.
+ * Komponen kalender bulanan paged serbaguna untuk mode Tanggal Spesifik maupun Rentang Tanggal.
+ * Dilengkapi tombol panah navigasi [<] dan [>], tanpa beban scrolling dan bebas stutter.
  */
 @Composable
-private fun PagedMonthRangeCalendar(
+private fun PagedMonthCalendar(
     displayedYear: Int,
     displayedMonth: Int,
     monthNames: List<String>,
     shortWeekdays: List<String>,
-    rangeStartMillis: Long?,
-    rangeEndMillis: Long?,
+    selectedStartMillis: Long?,
+    selectedEndMillis: Long?,
+    isRangeMode: Boolean,
     minYear: Int,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
@@ -571,9 +646,9 @@ private fun PagedMonthRangeCalendar(
     val totalCells = leadingEmptyCount + daysInMonth
     val rowsCount = (totalCells + 6) / 7
 
-    val isRangeSelected = rangeStartMillis != null && rangeEndMillis != null
-    val sortedStart = if (isRangeSelected) minOf(rangeStartMillis!!, rangeEndMillis!!) else rangeStartMillis
-    val sortedEnd = if (isRangeSelected) maxOf(rangeStartMillis!!, rangeEndMillis!!) else null
+    val isRangeSelected = isRangeMode && selectedStartMillis != null && selectedEndMillis != null
+    val sortedStart = if (isRangeSelected) minOf(selectedStartMillis!!, selectedEndMillis!!) else selectedStartMillis
+    val sortedEnd = if (isRangeSelected) maxOf(selectedStartMillis!!, selectedEndMillis!!) else null
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // Navigasi Bulan: Nama Bulan & Tahun serta Tombol Panah [<] [>]
@@ -668,8 +743,8 @@ private fun PagedMonthRangeCalendar(
                             val cellMillis = cellCal.timeInMillis
 
                             val isStart = sortedStart != null && isSameDay(cellMillis, sortedStart)
-                            val isEnd = sortedEnd != null && isSameDay(cellMillis, sortedEnd)
-                            val isBetween = sortedStart != null && sortedEnd != null && cellMillis > sortedStart && cellMillis < sortedEnd
+                            val isEnd = isRangeMode && sortedEnd != null && isSameDay(cellMillis, sortedEnd)
+                            val isBetween = isRangeMode && sortedStart != null && sortedEnd != null && cellMillis > sortedStart && cellMillis < sortedEnd
                             val isToday = isSameDay(cellMillis, System.currentTimeMillis())
 
                             Box(
@@ -678,7 +753,7 @@ private fun PagedMonthRangeCalendar(
                                     .height(38.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // Strip Highlight Rentang di Belakang Badge
+                                // Strip Highlight Rentang di Belakang Badge (Khusus Mode Rentang)
                                 if (isRangeSelected && sortedStart != null && sortedEnd != null && sortedStart < sortedEnd) {
                                     if (isBetween) {
                                         Box(
