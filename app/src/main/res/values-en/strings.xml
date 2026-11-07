@@ -154,4 +154,7 @@
     <string name="btn_apply_filter">Apply Filter</string>
     <string name="btn_reset_filter">Reset Filter</string>
     <string name="filter_all_sessions">All Sessions</string>
+    <string name="filter_range_select_start">Select range start date</string>
+    <string name="filter_range_start_fmt">Start: %s • Select end date</string>
+    <string name="filter_range_days_fmt">%d days</string>
 </resources>
