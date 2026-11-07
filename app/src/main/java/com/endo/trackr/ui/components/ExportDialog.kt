@@ -1,7 +1,5 @@
 package com.endo.trackr.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Share
@@ -32,9 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.endo.trackr.R
 import com.endo.trackr.data.exporter.ExportFormat
 
 /**
@@ -69,7 +67,7 @@ fun ExportDialog(
         },
         title = {
             Text(
-                text = "Ekspor Riwayat Jejak (GIS)",
+                text = stringResource(R.string.export_dialog_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -93,7 +91,7 @@ fun ExportDialog(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "$totalPoints titik GPS • $stayPointsCount titik singgah terdeteksi",
+                            text = stringResource(R.string.export_summary_fmt, totalPoints, stayPointsCount),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -103,7 +101,7 @@ fun ExportDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "Pilih Format Berkas:",
+                    text = stringResource(R.string.export_select_format),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -166,7 +164,7 @@ fun ExportDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Opsi Ekspor:",
+                    text = stringResource(R.string.export_options),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -186,7 +184,7 @@ fun ExportDialog(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Sertakan Titik Singgah ($stayPointsCount tempat)",
+                        text = stringResource(R.string.export_opt_stay_points, stayPointsCount),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -205,7 +203,7 @@ fun ExportDialog(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Abaikan titik lompatan GPS (Jitter filter)",
+                        text = stringResource(R.string.export_opt_filter_jitter),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -214,7 +212,7 @@ fun ExportDialog(
 
                 // Preview Nama Berkas
                 Text(
-                    text = "Berkas: $suggestedFilename",
+                    text = "$suggestedFilename",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -235,7 +233,7 @@ fun ExportDialog(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Bagikan")
+                    Text(stringResource(R.string.btn_share))
                 }
 
                 // Tombol Simpan ke Perangkat (SAF)
@@ -249,13 +247,13 @@ fun ExportDialog(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Simpan File")
+                    Text(stringResource(R.string.btn_save_to_file))
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismissRequest) {
-                Text("Batal")
+                Text(stringResource(R.string.btn_cancel))
             }
         }
     )

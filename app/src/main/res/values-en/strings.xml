@@ -1,0 +1,138 @@
+<resources>
+    <string name="app_name">TrackR</string>
+    <string name="app_subtitle">Lightweight GPS Logger &amp; Timeline</string>
+    <string name="btn_export">Export Track History</string>
+    <string name="btn_settings">App Settings</string>
+
+    <!-- Tab Navigation -->
+    <string name="tab_map_tracker">Map &amp; Tracker</string>
+    <string name="tab_timeline">Timeline</string>
+    <string name="tab_stats_heatmap">Stats &amp; Heatmap</string>
+
+    <!-- Tracking Controls & Status -->
+    <string name="btn_start_tracking">Start Tracking</string>
+    <string name="btn_pause_tracking">Pause</string>
+    <string name="btn_resume_tracking">Resume</string>
+    <string name="btn_stop_tracking">Stop</string>
+    <string name="status_recording">RECORDING</string>
+    <string name="status_paused">TRACKING PAUSED</string>
+    <string name="status_ready">READY TO TRACK</string>
+    <string name="badge_moving">MOVING (5s Polling)</string>
+    <string name="badge_idle">IDLE (60s Polling)</string>
+    <string name="badge_jitter_rejected">%d Jitter Rejected</string>
+    <string name="permission_location_required">Location permission is required to record travel routes</string>
+    <string name="service_started_toast">Foreground Service started</string>
+
+    <!-- Battery Banner -->
+    <string name="battery_banner_title">Battery Exemption Required (ColorOS / Android)</string>
+    <string name="battery_banner_desc">To prevent background tracking from stopping when screen locks or apps are swiped, allow TrackR to run without battery optimization.</string>
+    <string name="btn_configure_battery">Configure Battery</string>
+    <string name="btn_close_alert">Dismiss Alert</string>
+
+    <!-- Session History -->
+    <string name="history_saved_sessions">Saved Session History (%d)</string>
+    <string name="history_empty">No GPS route records saved yet. Tap Start Tracking to record a route.</string>
+    <string name="history_summary_format">Total %1$d points • Distance: %2$s • Duration: %3$s</string>
+    <string name="btn_export_session">Export GIS File</string>
+    <string name="btn_delete_session">Delete Session</string>
+
+    <!-- Date Categories -->
+    <string name="date_today">Today</string>
+    <string name="date_yesterday">Yesterday</string>
+    <string name="date_this_week">This Week</string>
+    <string name="date_this_month">This Month</string>
+
+    <!-- Timeline Screen -->
+    <string name="timeline_stay_points">%d Stay Points</string>
+    <string name="timeline_points_desc">%d GPS Points</string>
+    <string name="timeline_unresolved_desc">%d Unresolved</string>
+    <string name="btn_demo_simulation">Demo Simulation</string>
+    <string name="btn_resolve_addresses">Resolve All Addresses</string>
+    <string name="btn_recluster">Re-cluster</string>
+    <string name="btn_export_timeline">Export Track</string>
+    <string name="timeline_empty_title">No Timeline Segments Yet</string>
+    <string name="timeline_empty_desc">Start tracking or tap \'Demo Simulation\' above to see how hundreds of GPS points are clustered and resolved into street names.</string>
+    <string name="timeline_stay_prefix">Stay</string>
+    <string name="timeline_trip_title">Moving Trip</string>
+    <string name="timeline_resolving_address">Resolving address...</string>
+    <string name="btn_resolve_address">Resolve Address</string>
+
+    <!-- Stats & Heatmap Screen -->
+    <string name="stats_header_title">Distance Analytics &amp; Heatmap</string>
+    <string name="stats_header_desc">Mathematical distance calculation via Haversine formula and spatial heatmap density visualization from GPS sensor records.</string>
+    <string name="stats_range_today">Today</string>
+    <string name="stats_range_week">7 Days</string>
+    <string name="stats_range_month">30 Days</string>
+    <string name="stats_range_all_time">All Time</string>
+    <string name="stats_metric_total_distance">Total Distance</string>
+    <string name="stats_metric_haversine_sub">Haversine Formula</string>
+    <string name="stats_metric_total_time">Total Duration</string>
+    <string name="stats_metric_duration_sub">Tracking Duration</string>
+    <string name="stats_metric_avg_speed">Average Speed</string>
+    <string name="stats_metric_avg_speed_sub">Distance / Total Hours</string>
+    <string name="stats_metric_top_speed">Top Speed</string>
+    <string name="stats_metric_top_speed_sub">Max Speed Detected</string>
+    <string name="stats_metric_stay_points">Stay Points</string>
+    <string name="stats_metric_stay_places">%d Places</string>
+    <string name="stats_metric_stay_sub">Radius ≤30m, Duration ≥10m</string>
+    <string name="stats_metric_gps_points">Valid GPS Points</string>
+    <string name="stats_metric_gps_points_val">%d Points</string>
+    <string name="stats_metric_gps_sessions_sub">From %d Track Sessions</string>
+    <string name="stats_metric_fuel_est">Fuel Consumption</string>
+    <string name="stats_metric_fuel_sub_fmt">Moving: %1$.2fL • Idle: %2$.2fL</string>
+    <string name="stats_metric_cost_est">Estimated Cost</string>
+    <string name="stats_fuel_disabled_title">Fuel Cost Estimation Disabled</string>
+    <string name="stats_fuel_disabled_desc">No active fuel profile in data table.</string>
+    <string name="btn_manage_fuel">Manage Fuel</string>
+    <string name="heatmap_banner_title">Dynamic Heatmap Overlay</string>
+    <string name="heatmap_banner_desc">Tap the flame button at bottom-right of the map to toggle between heat density gradient overlay (Heatmap) and route lines (Polyline).</string>
+
+    <!-- Settings & Fuel Preferences Dialog -->
+    <string name="settings_dialog_title">App Settings</string>
+    <string name="settings_dialog_subtitle">Language preferences, fuel, &amp; vehicle economy</string>
+    <string name="settings_language_section">Interface Language</string>
+    <string name="settings_language_desc">Select display language for TrackR</string>
+    <string name="lang_indonesian">Bahasa Indonesia</string>
+    <string name="lang_english">English</string>
+    <string name="settings_idle_rate_section">Idle Consumption Rate (Stationary/Traffic)</string>
+    <string name="settings_idle_rate_desc">Fuel consumed while stopped/traffic lights (Honda Vario 160 default: 0.18 L/h).</string>
+    <string name="settings_idle_unit">Liters / Hour</string>
+    <string name="settings_fuel_profiles_title">Fuel Profiles (%d)</string>
+    <string name="settings_fuel_profiles_sub">Select one to activate</string>
+    <string name="settings_fuel_empty_title">Fuel Data Table Empty</string>
+    <string name="settings_fuel_empty_desc">Fuel expense calculation disabled. Tap \'+ Add New Fuel Profile\' below to begin cost calculations.</string>
+    <string name="btn_add_fuel">Add New Fuel Profile</string>
+    <string name="badge_active">Active</string>
+    <string name="btn_edit">Edit</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_close">Close</string>
+    <string name="dialog_edit_fuel_title">Edit Fuel Profile</string>
+    <string name="dialog_add_fuel_title">Add Fuel Profile</string>
+    <string name="field_fuel_name">Fuel Name</string>
+    <string name="field_fuel_name_placeholder">e.g., Pertamax, Shell Super, BP</string>
+    <string name="field_fuel_price">Price per Liter (IDR)</string>
+    <string name="field_fuel_efficiency">Fuel Economy (km/L)</string>
+    <string name="field_fuel_efficiency_sub">Honda Vario 160 default: 45.0 km/L</string>
+    <string name="err_fuel_name_empty">Fuel name cannot be empty</string>
+    <string name="err_fuel_price_invalid">Enter a valid price per liter (> 0)</string>
+    <string name="err_fuel_efficiency_invalid">Enter a valid fuel economy (> 0)</string>
+
+    <!-- GIS Export Dialog -->
+    <string name="export_dialog_title">Export Track History (GIS)</string>
+    <string name="export_summary_fmt">%1$d GPS points • %2$d stay points detected</string>
+    <string name="export_select_format">Select File Format:</string>
+    <string name="export_options">Export Options:</string>
+    <string name="export_opt_stay_points">Include Stay Points (%d places)</string>
+    <string name="export_opt_filter_jitter">Filter GPS Jitter / Noise</string>
+    <string name="btn_save_to_file">Save to File</string>
+    <string name="btn_share">Share</string>
+    <string name="tracker_active">Active Tracking</string>
+    <string name="tracker_ready">Location Tracker Ready</string>
+    <string name="status_paused_short">PAUSED</string>
+    <string name="status_recording_short">RECORDING</string>
+    <string name="metric_speed">Speed</string>
+    <string name="metric_gps_accuracy">GPS Accuracy</string>
+    <string name="tracker_prompt">Tap the button below to start Foreground Service and record routes on the map.</string>
+    <string name="btn_start_tracking_gps">Start GPS Tracking</string>
+</resources>

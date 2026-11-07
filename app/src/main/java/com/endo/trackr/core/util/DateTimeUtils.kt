@@ -1,5 +1,7 @@
 package com.endo.trackr.core.util
 
+import android.content.Context
+import com.endo.trackr.R
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -11,20 +13,19 @@ import java.util.TimeZone
  */
 object DateTimeUtils {
 
-    private val fullDateTimeFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
-    private val timeOnlyFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    private val dateOnlyFormat = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
-
     fun formatFullDateTime(epochMillis: Long): String {
-        return fullDateTimeFormat.format(Date(epochMillis))
+        val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+        return sdf.format(Date(epochMillis))
     }
 
     fun formatTimeOnly(epochMillis: Long): String {
-        return timeOnlyFormat.format(Date(epochMillis))
+        val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        return sdf.format(Date(epochMillis))
     }
 
     fun formatDateOnly(epochMillis: Long): String {
-        return dateOnlyFormat.format(Date(epochMillis))
+        val sdf = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
+        return sdf.format(Date(epochMillis))
     }
 
     /**
@@ -72,40 +73,40 @@ object DateTimeUtils {
     }
 
     /**
-     * Mengelompokkan timestamp ke dalam kategori tanggal yang ramah pengguna:
-     * - "Hari Ini"
-     * - "Kemarin"
-     * - "Minggu Ini"
-     * - "Bulan Ini"
+     * Mengelompokkan timestamp ke dalam kategori tanggal yang ramah pengguna dan terlokalisasi:
+     * - "Hari Ini" / "Today"
+     * - "Kemarin" / "Yesterday"
+     * - "Minggu Ini" / "This Week"
+     * - "Bulan Ini" / "This Month"
      * - Format bulan & tahun (misal: "Oktober 2026") untuk yang lebih lama.
      */
-    fun getDateCategory(epochMillis: Long): String {
+    fun getDateCategory(epochMillis: Long, context: Context? = null): String {
         val now = Calendar.getInstance()
         val target = Calendar.getInstance().apply { timeInMillis = epochMillis }
 
         if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
             now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
         ) {
-            return "Hari Ini"
+            return context?.getString(R.string.date_today) ?: "Hari Ini"
         }
 
         val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
         if (yesterday.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
             yesterday.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
         ) {
-            return "Kemarin"
+            return context?.getString(R.string.date_yesterday) ?: "Kemarin"
         }
 
         if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
             now.get(Calendar.WEEK_OF_YEAR) == target.get(Calendar.WEEK_OF_YEAR)
         ) {
-            return "Minggu Ini"
+            return context?.getString(R.string.date_this_week) ?: "Minggu Ini"
         }
 
         if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
             now.get(Calendar.MONTH) == target.get(Calendar.MONTH)
         ) {
-            return "Bulan Ini"
+            return context?.getString(R.string.date_this_month) ?: "Bulan Ini"
         }
 
         val monthYearFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
