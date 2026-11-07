@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.endo.trackr.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -356,7 +358,7 @@ fun OsmMapView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Kepadatan:",
+                        text = stringResource(R.string.heatmap_density_label),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -369,7 +371,7 @@ fun OsmMapView(
                                 .size(8.dp)
                                 .background(androidx.compose.ui.graphics.Color(0xFF00B0FF), CircleShape)
                         )
-                        Text("Rendah", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.heatmap_density_low), style = MaterialTheme.typography.labelSmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -380,7 +382,7 @@ fun OsmMapView(
                                 .size(8.dp)
                                 .background(androidx.compose.ui.graphics.Color(0xFFFFD600), CircleShape)
                         )
-                        Text("Sedang", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.heatmap_density_medium), style = MaterialTheme.typography.labelSmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -391,7 +393,7 @@ fun OsmMapView(
                                 .size(8.dp)
                                 .background(androidx.compose.ui.graphics.Color(0xFFFF3D00), CircleShape)
                         )
-                        Text("Padat", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.heatmap_density_high), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

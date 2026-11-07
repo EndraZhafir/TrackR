@@ -1,3 +1,162 @@
 <resources>
     <string name="app_name">TrackR</string>
+    <string name="app_subtitle">Lightweight GPS Logger &amp; Timeline</string>
+    <string name="btn_export">Ekspor Riwayat Jejak</string>
+    <string name="btn_settings">Pengaturan Aplikasi</string>
+
+    <!-- Navigasi Tab -->
+    <string name="tab_map_tracker">Peta &amp; Pelacak</string>
+    <string name="tab_timeline">Timeline</string>
+    <string name="tab_stats_heatmap">Statistik &amp; Heatmap</string>
+
+    <!-- Kontrol Pelacakan & Status -->
+    <string name="btn_start_tracking">Mulai Pelacakan</string>
+    <string name="btn_pause_tracking">Jeda</string>
+    <string name="btn_resume_tracking">Lanjutkan</string>
+    <string name="btn_stop_tracking">Selesai</string>
+    <string name="status_recording">SEDANG MEREKAM</string>
+    <string name="status_paused">PELACAKAN DIJEDA</string>
+    <string name="status_ready">SIAP MEREKAM</string>
+    <string name="badge_moving">BERGERAK (Polling 5s)</string>
+    <string name="badge_idle">DIAM / IDLE (Polling 60s)</string>
+    <string name="badge_jitter_rejected">%d Jitter Ditolak</string>
+    <string name="permission_location_required">Izin lokasi diperlukan untuk merekam rute perjalanan</string>
+    <string name="service_started_toast">Foreground Service dimulai</string>
+
+    <!-- Banner Proteksi Baterai -->
+    <string name="battery_banner_title">Izin Baterai Belum Diberikan (ColorOS / Android)</string>
+    <string name="battery_banner_desc">Agar pelacakan tidak mati saat layar terkunci atau di-swipe, izinkan TrackR berjalan tanpa batasan optimasi baterai.</string>
+    <string name="btn_configure_battery">Atur Izin Baterai</string>
+    <string name="btn_close_alert">Tutup Peringatan</string>
+
+    <!-- Riwayat Sesi -->
+    <string name="history_saved_sessions">Riwayat Sesi Tersimpan (%d)</string>
+    <string name="history_empty">Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute.</string>
+    <string name="history_filter_empty">Tidak ada rekaman sesi pada periode filter yang dipilih.</string>
+    <string name="history_summary_format">Total %1$d titik • Jarak: %2$s • Durasi: %3$s</string>
+    <string name="btn_export_session">Ekspor Berkas GIS</string>
+    <string name="btn_delete_session">Hapus Sesi</string>
+
+    <!-- Kategori Tanggal -->
+    <string name="date_today">Hari Ini</string>
+    <string name="date_yesterday">Kemarin</string>
+    <string name="date_this_week">Minggu Ini</string>
+    <string name="date_this_month">Bulan Ini</string>
+
+    <!-- Layar Timeline -->
+    <string name="timeline_stay_points">%d Titik Singgah</string>
+    <string name="timeline_points_desc">%d Titik GPS</string>
+    <string name="timeline_unresolved_desc">%d Belum Teridentifikasi</string>
+    <string name="btn_demo_simulation">Simulasi Demo</string>
+    <string name="btn_resolve_addresses">Terjemahkan Semua Alamat</string>
+    <string name="btn_recluster">Kelompokkan Ulang</string>
+    <string name="btn_export_timeline">Ekspor Jejak</string>
+    <string name="timeline_empty_title">Belum Ada Segmen Timeline</string>
+    <string name="timeline_empty_desc">Mulai pelacakan atau tekan tombol \'Simulasi Demo\' di atas untuk melihat bagaimana ratusan titik GPS dikelompokkan dan diterjemahkan menjadi nama jalan/tempat.</string>
+    <string name="timeline_stay_prefix">Singgah</string>
+    <string name="timeline_trip_title">Perjalanan Bergerak</string>
+    <string name="timeline_resolving_address">Menerjemahkan alamat...</string>
+    <string name="btn_resolve_address">Terjemahkan Alamat</string>
+
+    <!-- Layar Statistik & Heatmap -->
+    <string name="stats_header_title">Analitik Jarak &amp; Heatmap</string>
+    <string name="stats_header_desc">Kalkulasi jarak tempuh matematis rumus Haversine dan visualisasi lapisan kepadatan panas spasial dari rekaman sensor GPS.</string>
+    <string name="stats_range_today">Hari Ini</string>
+    <string name="stats_range_week">7 Hari</string>
+    <string name="stats_range_month">30 Hari</string>
+    <string name="stats_range_all_time">Semua Waktu</string>
+    <string name="stats_metric_total_distance">Total Jarak</string>
+    <string name="stats_metric_haversine_sub">Rumus Haversine</string>
+    <string name="stats_metric_total_time">Total Waktu</string>
+    <string name="stats_metric_duration_sub">Durasi Pelacakan</string>
+    <string name="stats_metric_avg_speed">Kecepatan Rata-Rata</string>
+    <string name="stats_metric_avg_speed_sub">Jarak / Total Jam</string>
+    <string name="stats_metric_top_speed">Kecepatan Puncak</string>
+    <string name="stats_metric_top_speed_sub">Top Speed Terdeteksi</string>
+    <string name="stats_metric_stay_points">Titik Singgah</string>
+    <string name="stats_metric_stay_places">%d Tempat</string>
+    <string name="stats_metric_stay_sub">Radius ≤30m, Durasi ≥10m</string>
+    <string name="stats_metric_gps_points">Titik GPS Valid</string>
+    <string name="stats_metric_gps_points_val">%d Titik</string>
+    <string name="stats_metric_gps_sessions_sub">Dari %d Sesi Jejak</string>
+    <string name="stats_metric_fuel_est">Estimasi BBM</string>
+    <string name="stats_metric_fuel_sub_fmt">Laju: %1$.2fL • Idle: %2$.2fL</string>
+    <string name="stats_metric_cost_est">Estimasi Biaya</string>
+    <string name="stats_fuel_disabled_title">Estimasi Biaya BBM Dinonaktifkan</string>
+    <string name="stats_fuel_disabled_desc">Belum ada jenis bensin aktif di tabel data.</string>
+    <string name="btn_manage_fuel">Atur BBM</string>
+    <string name="heatmap_banner_title">Lapisan Heatmap Dinamis</string>
+    <string name="heatmap_banner_desc">Ketuk tombol api di pojok kanan bawah peta untuk beralih antara lapisan kepadatan gradien panas (Heatmap) dan garis rute perjalanan (Polyline).</string>
+
+    <!-- Dialog Pengaturan & Preferensi Bahan Bakar -->
+    <string name="settings_dialog_title">Pengaturan Aplikasi</string>
+    <string name="settings_dialog_subtitle">Preferensi bahasa, bahan bakar, &amp; efisiensi kendaraan</string>
+    <string name="settings_language_section">Bahasa Antarmuka</string>
+    <string name="settings_language_desc">Pilih bahasa tampilan untuk aplikasi TrackR</string>
+    <string name="lang_indonesian">Bahasa Indonesia</string>
+    <string name="lang_english">English</string>
+    <string name="settings_idle_rate_section">Laju Konsumsi Idle (Diam/Macet)</string>
+    <string name="settings_idle_rate_desc">Konsumsi bensin saat berhenti/lampu merah (Bawaan Honda Vario 160: 0,18 L/jam).</string>
+    <string name="settings_idle_unit">Liter / Jam</string>
+    <string name="settings_fuel_profiles_title">Daftar Profil Bahan Bakar (%d)</string>
+    <string name="settings_fuel_profiles_sub">Pilih salah satu untuk aktif</string>
+    <string name="settings_fuel_empty_title">Data Tabel Bahan Bakar Kosong</string>
+    <string name="settings_fuel_empty_desc">Kalkulasi pengeluaran bensin dinonaktifkan. Tekan tombol \'+ Tambah Bahan Bakar\' di bawah untuk mulai menghitung estimasi biaya.</string>
+    <string name="btn_add_fuel">Tambah Bahan Bakar Baru</string>
+    <string name="badge_active">Aktif</string>
+    <string name="btn_edit">Ubah</string>
+    <string name="btn_save">Simpan</string>
+    <string name="btn_cancel">Batal</string>
+    <string name="btn_close">Tutup</string>
+    <string name="dialog_edit_fuel_title">Edit Bahan Bakar</string>
+    <string name="dialog_add_fuel_title">Tambah Bahan Bakar</string>
+    <string name="field_fuel_name">Nama Bahan Bakar</string>
+    <string name="field_fuel_name_placeholder">Contoh: Pertamax, Pertalite, Shell</string>
+    <string name="field_fuel_price">Harga per Liter (Rp)</string>
+    <string name="field_fuel_efficiency">Rata-Rata Pemakaian (km/L)</string>
+    <string name="field_fuel_efficiency_sub">Bawaan Honda Vario 160: 45.0 km/L</string>
+    <string name="err_fuel_name_empty">Nama bahan bakar tidak boleh kosong</string>
+    <string name="err_fuel_price_invalid">Masukkan harga per liter yang valid (> 0)</string>
+    <string name="err_fuel_efficiency_invalid">Masukkan efisiensi km/L yang valid (> 0)</string>
+
+    <!-- Dialog Ekspor GIS -->
+    <string name="export_dialog_title">Ekspor Riwayat Jejak (GIS)</string>
+    <string name="export_summary_fmt">%1$d titik GPS • %2$d titik singgah terdeteksi</string>
+    <string name="export_select_format">Pilih Format Berkas:</string>
+    <string name="export_options">Opsi Ekspor:</string>
+    <string name="export_opt_stay_points">Sertakan Titik Singgah (%d tempat)</string>
+    <string name="export_opt_filter_jitter">Saring Titik Jitter / Noise GPS</string>
+    <string name="btn_save_to_file">Simpan ke Berkas</string>
+    <string name="btn_share">Bagikan</string>
+    <string name="tracker_active">Pelacakan Aktif</string>
+    <string name="tracker_ready">Pelacak Lokasi Siap</string>
+    <string name="status_paused_short">DIJEDA</string>
+    <string name="status_recording_short">MEREKAM</string>
+    <string name="metric_speed">Kecepatan</string>
+    <string name="metric_gps_accuracy">Akurasi GPS</string>
+    <string name="tracker_prompt">Tekan tombol di bawah untuk menyalakan Foreground Service dan mencatat jejak rute di atas peta.</string>
+    <string name="btn_start_tracking_gps">Mulai Pelacakan GPS</string>
+    <!-- Heatmap Legend -->
+    <string name="heatmap_density_label">Kepadatan:</string>
+    <string name="heatmap_density_low">Rendah</string>
+    <string name="heatmap_density_medium">Sedang</string>
+    <string name="heatmap_density_high">Padat</string>
+    <string name="session_title_prefix">Jejak</string>
+    <string name="session_number_prefix">Sesi #%d</string>
+    <string name="filter_custom_date">Kustom 📅</string>
+    <string name="filter_dialog_title">Filter Riwayat &amp; Statistik</string>
+    <string name="filter_dialog_subtitle">Pilih tanggal, rentang tanggal, atau bulan &amp; tahun</string>
+    <string name="filter_tab_single_date">Tanggal Tertentu</string>
+    <string name="filter_tab_date_range">Rentang Tanggal</string>
+    <string name="filter_tab_month_year">Bulan &amp; Tahun</string>
+    <string name="filter_year_label">Pilih Tahun:</string>
+    <string name="filter_month_label">Pilih Bulan:</string>
+    <string name="btn_apply_filter">Terapkan Filter</string>
+    <string name="btn_reset_filter">Reset Filter</string>
+    <string name="filter_all_sessions">Semua Sesi</string>
+    <string name="filter_range_select_start">Pilih tanggal awal rentang</string>
+    <string name="filter_range_start_fmt">Mulai: %s • Pilih tanggal selesai</string>
+    <string name="filter_range_days_fmt">%d hari</string>
+    <string name="filter_single_selected_fmt">Terpilih: %s</string>
+    <string name="filter_single_select_prompt">Pilih satu tanggal tertentu</string>
 </resources>

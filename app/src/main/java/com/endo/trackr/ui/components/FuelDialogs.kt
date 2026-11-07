@@ -24,14 +24,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,25 +49,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.endo.trackr.R
+import com.endo.trackr.core.util.LanguageManager
 import com.endo.trackr.data.model.FuelProfile
 import java.util.Locale
 
 /**
- * Dialog utama Pengaturan Bahan Bakar & Kendaraan:
- * Mengatur laju idle mesin, memilih profil bahan bakar aktif, serta mengelola CRUD
- * (tambah, edit, dan hapus profil termasuk Pertalite & Pertamax).
+ * Dialog utama Pengaturan Aplikasi:
+ * Mengatur preferensi bahasa (Indonesia / English), laju idle mesin, memilih profil bahan bakar aktif,
+ * serta mengelola CRUD profil bahan bakar (termasuk Pertalite & Pertamax).
  */
 @Composable
 fun FuelSettingsDialog(
     isVisible: Boolean,
+    currentLanguage: String = LanguageManager.LANG_INDONESIAN,
     profiles: List<FuelProfile>,
     selectedProfileId: String?,
     idleRate: Double,
+    onLanguageSelected: (String) -> Unit,
     onSelectProfile: (String) -> Unit,
     onEditProfile: (FuelProfile) -> Unit,
     onDeleteProfile: (String) -> Unit,
@@ -128,12 +131,12 @@ fun FuelSettingsDialog(
 
                         Column {
                             Text(
-                                text = "Pengaturan Bahan Bakar",
+                                text = stringResource(R.string.settings_dialog_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Kelola harga, efisiensi km/L, & konsumsi idle",
+                                text = stringResource(R.string.settings_dialog_subtitle),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -141,7 +144,10 @@ fun FuelSettingsDialog(
                     }
 
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Tutup")
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.btn_close)
+                        )
                     }
                 }
 
@@ -155,7 +161,116 @@ fun FuelSettingsDialog(
                         .weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Bagian 1: Pengaturan Laju Idle Mesin
+                    // Bagian 1: Pengaturan Bahasa Antarmuka (Language Toggle)
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Language,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.settings_language_section),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Text(
+                                    text = stringResource(R.string.settings_language_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Pilihan Bahasa Indonesia
+                                    val isIdSelected = currentLanguage == LanguageManager.LANG_INDONESIAN
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isIdSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                                        border = if (isIdSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (!isIdSelected) onLanguageSelected(LanguageManager.LANG_INDONESIAN)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = isIdSelected,
+                                                onClick = {
+                                                    if (!isIdSelected) onLanguageSelected(LanguageManager.LANG_INDONESIAN)
+                                                }
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.lang_indonesian),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isIdSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isIdSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+
+                                    // Pilihan English
+                                    val isEnSelected = currentLanguage == LanguageManager.LANG_ENGLISH
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isEnSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                                        border = if (isEnSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                if (!isEnSelected) onLanguageSelected(LanguageManager.LANG_ENGLISH)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            RadioButton(
+                                                selected = isEnSelected,
+                                                onClick = {
+                                                    if (!isEnSelected) onLanguageSelected(LanguageManager.LANG_ENGLISH)
+                                                }
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.lang_english),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isEnSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isEnSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Bagian 2: Pengaturan Laju Idle Mesin
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -181,7 +296,7 @@ fun FuelSettingsDialog(
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            text = "Laju Konsumsi Idle (Diam/Macet)",
+                                            text = stringResource(R.string.settings_idle_rate_section),
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -189,13 +304,13 @@ fun FuelSettingsDialog(
 
                                     if (!isEditingIdleRate) {
                                         TextButton(onClick = { isEditingIdleRate = true }) {
-                                            Text("Ubah")
+                                            Text(stringResource(R.string.btn_edit))
                                         }
                                     }
                                 }
 
                                 Text(
-                                    text = "Konsumsi bensin saat berhenti/lampu merah (Bawaan Honda Vario 160: 0,18 L/jam).",
+                                    text = stringResource(R.string.settings_idle_rate_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -210,7 +325,7 @@ fun FuelSettingsDialog(
                                         OutlinedTextField(
                                             value = idleInputText,
                                             onValueChange = { idleInputText = it },
-                                            label = { Text("Liter / Jam") },
+                                            label = { Text(stringResource(R.string.settings_idle_unit)) },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                             singleLine = true,
                                             modifier = Modifier.weight(1f)
@@ -225,7 +340,7 @@ fun FuelSettingsDialog(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Check,
-                                                contentDescription = "Simpan",
+                                                contentDescription = stringResource(R.string.btn_save),
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                         }
@@ -233,7 +348,7 @@ fun FuelSettingsDialog(
                                         IconButton(onClick = { isEditingIdleRate = false }) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
-                                                contentDescription = "Batal",
+                                                contentDescription = stringResource(R.string.btn_cancel),
                                                 tint = MaterialTheme.colorScheme.error
                                             )
                                         }
@@ -244,7 +359,7 @@ fun FuelSettingsDialog(
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                                     ) {
                                         Text(
-                                            text = String.format(Locale.getDefault(), "%.2f Liter / Jam", idleRate),
+                                            text = String.format(Locale.getDefault(), "%.2f %s", idleRate, stringResource(R.string.settings_idle_unit)),
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -256,7 +371,7 @@ fun FuelSettingsDialog(
                         }
                     }
 
-                    // Bagian 2: Header Profil Bahan Bakar
+                    // Bagian 3: Header Profil Bahan Bakar
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -264,20 +379,20 @@ fun FuelSettingsDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Daftar Profil Bahan Bakar (${profiles.size})",
+                                text = stringResource(R.string.settings_fuel_profiles_title, profiles.size),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
 
                             Text(
-                                text = "Pilih salah satu untuk aktif",
+                                text = stringResource(R.string.settings_fuel_profiles_sub),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
                         }
                     }
 
-                    // Bagian 3: Empty State jika data tabel kosong
+                    // Bagian 4: Empty State jika data tabel kosong
                     if (profiles.isEmpty()) {
                         item {
                             Surface(
@@ -297,13 +412,13 @@ fun FuelSettingsDialog(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "Data Tabel Bahan Bakar Kosong",
+                                        text = stringResource(R.string.settings_fuel_empty_title),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Kalkulasi pengeluaran bensin dinonaktifkan. Tekan tombol '+ Tambah Bahan Bakar' di bawah untuk mulai menghitung estimasi biaya.",
+                                        text = stringResource(R.string.settings_fuel_empty_desc),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -338,7 +453,7 @@ fun FuelSettingsDialog(
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Tambah Bahan Bakar Baru")
+                    Text(stringResource(R.string.btn_add_fuel))
                 }
             }
         }
@@ -406,7 +521,7 @@ private fun FuelProfileCard(
                                 color = MaterialTheme.colorScheme.primary
                             ) {
                                 Text(
-                                    text = "Aktif",
+                                    text = stringResource(R.string.badge_active),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimary,
@@ -421,7 +536,7 @@ private fun FuelProfileCard(
                     Text(
                         text = String.format(
                             Locale.getDefault(),
-                            "Rp %,.0f / Liter • Efisiensi: %.1f km/L",
+                            "Rp %,.0f / Liter • %.1f km/L",
                             profile.pricePerLiter,
                             profile.efficiencyKmL
                         ).replace(',', '.'),
@@ -436,7 +551,7 @@ private fun FuelProfileCard(
                 IconButton(onClick = onEdit) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit Bahan Bakar",
+                        contentDescription = stringResource(R.string.btn_edit),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -445,7 +560,7 @@ private fun FuelProfileCard(
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Hapus Bahan Bakar",
+                        contentDescription = "Hapus",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp)
                     )
@@ -482,11 +597,15 @@ fun FuelFormDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    val nameEmptyErr = stringResource(R.string.err_fuel_name_empty)
+    val priceInvalidErr = stringResource(R.string.err_fuel_price_invalid)
+    val efficiencyInvalidErr = stringResource(R.string.err_fuel_efficiency_invalid)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (isEditing) "Edit Bahan Bakar" else "Tambah Bahan Bakar",
+                text = stringResource(if (isEditing) R.string.dialog_edit_fuel_title else R.string.dialog_add_fuel_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -502,8 +621,8 @@ fun FuelFormDialog(
                         name = it
                         errorMessage = null
                     },
-                    label = { Text("Nama Bahan Bakar") },
-                    placeholder = { Text("Contoh: Pertamax, Pertalite, Shell") },
+                    label = { Text(stringResource(R.string.field_fuel_name)) },
+                    placeholder = { Text(stringResource(R.string.field_fuel_name_placeholder)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -514,8 +633,8 @@ fun FuelFormDialog(
                         priceText = it
                         errorMessage = null
                     },
-                    label = { Text("Harga per Liter (Rp)") },
-                    placeholder = { Text("Contoh: 15950") },
+                    label = { Text(stringResource(R.string.field_fuel_price)) },
+                    placeholder = { Text("15950") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -527,8 +646,8 @@ fun FuelFormDialog(
                         efficiencyText = it
                         errorMessage = null
                     },
-                    label = { Text("Rata-Rata Pemakaian (km/L)") },
-                    supportingText = { Text("Bawaan Honda Vario 160: 45.0 km/L") },
+                    label = { Text(stringResource(R.string.field_fuel_efficiency)) },
+                    supportingText = { Text(stringResource(R.string.field_fuel_efficiency_sub)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -551,27 +670,27 @@ fun FuelFormDialog(
                     val efficiency = efficiencyText.toDoubleOrNull()
 
                     if (cleanName.isBlank()) {
-                        errorMessage = "Nama bahan bakar tidak boleh kosong"
+                        errorMessage = nameEmptyErr
                         return@Button
                     }
                     if (price == null || price <= 0.0) {
-                        errorMessage = "Masukkan harga per liter yang valid (> 0)"
+                        errorMessage = priceInvalidErr
                         return@Button
                     }
                     if (efficiency == null || efficiency <= 0.0) {
-                        errorMessage = "Masukkan efisiensi km/L yang valid (> 0)"
+                        errorMessage = efficiencyInvalidErr
                         return@Button
                     }
 
                     onSave(cleanName, price, efficiency, profileToEdit?.id)
                 }
             ) {
-                Text(if (isEditing) "Simpan Perubahan" else "Tambahkan")
+                Text(stringResource(if (isEditing) R.string.btn_save else R.string.btn_add_fuel))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("Batal")
+                Text(stringResource(R.string.btn_cancel))
             }
         }
     )

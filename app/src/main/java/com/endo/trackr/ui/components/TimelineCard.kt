@@ -34,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.endo.trackr.R
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.core.util.TimelineSegment
@@ -162,7 +164,7 @@ private fun StayPointCard(
                         )
                     } else {
                         Text(
-                            text = "Titik Singgah #${stay.id}",
+                            text = "${stringResource(R.string.timeline_stay_prefix)} #${stay.id}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -175,7 +177,7 @@ private fun StayPointCard(
                     color = Color(0xFFE65100).copy(alpha = 0.15f)
                 ) {
                     Text(
-                        text = "Singgah ${DateTimeUtils.formatDuration(stay.durationSeconds)}",
+                        text = "${stringResource(R.string.timeline_stay_prefix)} ${DateTimeUtils.formatDuration(stay.durationSeconds)}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFE65100),
@@ -208,7 +210,7 @@ private fun StayPointCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${stay.pointCount} titik dikelompokkan • Lat: ${String.format("%.5f", stay.latitude)}, Lng: ${String.format("%.5f", stay.longitude)}",
+                text = "${stay.pointCount} pts • Lat: ${String.format("%.5f", stay.latitude)}, Lng: ${String.format("%.5f", stay.longitude)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -227,7 +229,7 @@ private fun StayPointCard(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "Alamat Tersimpan di Cache Room",
+                        text = "Cached in Room",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF2E7D32)
                     )
@@ -246,7 +248,7 @@ private fun StayPointCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Mencari Nama Alamat...",
+                            text = stringResource(R.string.timeline_resolving_address),
                             style = MaterialTheme.typography.labelSmall
                         )
                     } else {
@@ -257,7 +259,7 @@ private fun StayPointCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Terjemahkan Nama Tempat (On-Demand)",
+                            text = stringResource(R.string.btn_resolve_address),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
@@ -283,7 +285,7 @@ private fun TripSegmentCard(trip: TimelineSegment.Trip) {
         ) {
             Column {
                 Text(
-                    text = "Perjalanan Bergerak",
+                    text = stringResource(R.string.timeline_trip_title),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary

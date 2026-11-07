@@ -1,6 +1,11 @@
 package com.endo.trackr.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalContext
+import com.endo.trackr.core.util.HistoryDateFilter
+import com.endo.trackr.core.util.DateFilterType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,8 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.endo.trackr.R
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
 import com.endo.trackr.core.util.StatsTimeRange
@@ -133,9 +140,9 @@ fun StatsMetricsGrid(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MetricCard(
-                title = "Total Jarak",
+                title = stringResource(R.string.stats_metric_total_distance),
                 value = LocationUtils.formatDistance(stats.totalDistanceMeters),
-                subtitle = "Rumus Haversine",
+                subtitle = stringResource(R.string.stats_metric_haversine_sub),
                 icon = Icons.Default.Route,
                 iconTint = Color(0xFF1976D2),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -143,9 +150,9 @@ fun StatsMetricsGrid(
             )
 
             MetricCard(
-                title = "Total Waktu",
+                title = stringResource(R.string.stats_metric_total_time),
                 value = DateTimeUtils.formatDuration(stats.totalDurationSeconds),
-                subtitle = "Durasi Pelacakan",
+                subtitle = stringResource(R.string.stats_metric_duration_sub),
                 icon = Icons.Default.Timer,
                 iconTint = Color(0xFF388E3C),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -159,9 +166,9 @@ fun StatsMetricsGrid(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MetricCard(
-                title = "Kecepatan Rata-Rata",
+                title = stringResource(R.string.stats_metric_avg_speed),
                 value = String.format(Locale.getDefault(), "%.1f km/h", stats.averageSpeedKmh),
-                subtitle = "Jarak / Total Jam",
+                subtitle = stringResource(R.string.stats_metric_avg_speed_sub),
                 icon = Icons.Default.Speed,
                 iconTint = Color(0xFF7B1FA2),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -169,9 +176,9 @@ fun StatsMetricsGrid(
             )
 
             MetricCard(
-                title = "Kecepatan Puncak",
+                title = stringResource(R.string.stats_metric_top_speed),
                 value = String.format(Locale.getDefault(), "%.1f km/h", stats.maxSpeedKmh),
-                subtitle = "Top Speed Terdeteksi",
+                subtitle = stringResource(R.string.stats_metric_top_speed_sub),
                 icon = Icons.Default.ElectricBolt,
                 iconTint = Color(0xFFF57C00),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -185,9 +192,9 @@ fun StatsMetricsGrid(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             MetricCard(
-                title = "Titik Singgah",
-                value = "${stats.stayPointsCount} Tempat",
-                subtitle = "Radius ≤30m, Durasi ≥10m",
+                title = stringResource(R.string.stats_metric_stay_points),
+                value = stringResource(R.string.stats_metric_stay_places, stats.stayPointsCount),
+                subtitle = stringResource(R.string.stats_metric_stay_sub),
                 icon = Icons.Default.Place,
                 iconTint = Color(0xFFD32F2F),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -195,9 +202,9 @@ fun StatsMetricsGrid(
             )
 
             MetricCard(
-                title = "Titik GPS Valid",
-                value = "${stats.totalPointsCount} Titik",
-                subtitle = "Dari ${stats.totalSessionsCount} Sesi Jejak",
+                title = stringResource(R.string.stats_metric_gps_points),
+                value = stringResource(R.string.stats_metric_gps_points_val, stats.totalPointsCount),
+                subtitle = stringResource(R.string.stats_metric_gps_sessions_sub, stats.totalSessionsCount),
                 icon = Icons.Default.AutoGraph,
                 iconTint = Color(0xFF00796B),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -213,11 +220,10 @@ fun StatsMetricsGrid(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 MetricCard(
-                    title = "Estimasi BBM",
-                    value = String.format(Locale.getDefault(), "%.2f Liter", stats.totalFuelLiters),
-                    subtitle = String.format(
-                        Locale.getDefault(),
-                        "Laju: %.2fL • Idle: %.2fL",
+                    title = stringResource(R.string.stats_metric_fuel_est),
+                    value = String.format(Locale.getDefault(), "%.2f L", stats.totalFuelLiters),
+                    subtitle = stringResource(
+                        R.string.stats_metric_fuel_sub_fmt,
                         stats.movingFuelLiters ?: 0.0,
                         stats.idleFuelLiters ?: 0.0
                     ),
@@ -229,7 +235,7 @@ fun StatsMetricsGrid(
                 )
 
                 MetricCard(
-                    title = "Estimasi Biaya",
+                    title = stringResource(R.string.stats_metric_cost_est),
                     value = String.format(Locale.getDefault(), "Rp %,.0f", stats.totalFuelCost).replace(',', '.'),
                     subtitle = "${activeProfile.name} @ Rp ${String.format(Locale.getDefault(), "%,.0f", activeProfile.pricePerLiter).replace(',', '.')}",
                     icon = Icons.Default.Payments,
@@ -277,12 +283,12 @@ fun StatsMetricsGrid(
 
                         Column {
                             Text(
-                                text = "Estimasi Biaya BBM Dinonaktifkan",
+                                text = stringResource(R.string.stats_fuel_disabled_title),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Belum ada jenis bensin aktif di tabel data.",
+                                text = stringResource(R.string.stats_fuel_disabled_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -304,7 +310,7 @@ fun StatsMetricsGrid(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Atur BBM", style = MaterialTheme.typography.labelSmall)
+                            Text(stringResource(R.string.btn_manage_fuel), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -318,20 +324,64 @@ fun StatsMetricsGrid(
  */
 @Composable
 fun TimeRangeSelector(
-    selectedRange: StatsTimeRange,
-    onRangeSelected: (StatsTimeRange) -> Unit,
+    selectedRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
+    onRangeSelected: (StatsTimeRange) -> Unit = {},
+    currentFilter: HistoryDateFilter? = null,
+    onOpenCustomFilterDialog: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         StatsTimeRange.entries.forEach { range ->
-            val isSelected = range == selectedRange
+            val isSelected = if (currentFilter != null) {
+                !currentFilter.isCustom && when (range) {
+                    StatsTimeRange.TODAY -> currentFilter.type == DateFilterType.TODAY
+                    StatsTimeRange.WEEK -> currentFilter.type == DateFilterType.WEEK
+                    StatsTimeRange.MONTH -> currentFilter.type == DateFilterType.MONTH
+                    StatsTimeRange.ALL_TIME -> currentFilter.type == DateFilterType.ALL_TIME
+                }
+            } else {
+                range == selectedRange
+            }
+
+            val rangeLabel = when (range) {
+                StatsTimeRange.TODAY -> stringResource(R.string.stats_range_today)
+                StatsTimeRange.WEEK -> stringResource(R.string.stats_range_week)
+                StatsTimeRange.MONTH -> stringResource(R.string.stats_range_month)
+                StatsTimeRange.ALL_TIME -> stringResource(R.string.stats_range_all_time)
+            }
             FilterChip(
                 selected = isSelected,
                 onClick = { onRangeSelected(range) },
-                label = { Text(range.displayName, style = MaterialTheme.typography.labelMedium) },
+                label = { Text(rangeLabel, style = MaterialTheme.typography.labelMedium) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        // Chip Filter Kustom (Single Date, Date Range, atau Month & Year)
+        if (onOpenCustomFilterDialog != null) {
+            val isCustomActive = currentFilter?.isCustom == true
+            val customLabel = if (isCustomActive) {
+                currentFilter.getDisplayLabel(context)
+            } else {
+                stringResource(R.string.filter_custom_date)
+            }
+
+            FilterChip(
+                selected = isCustomActive,
+                onClick = onOpenCustomFilterDialog,
+                label = { Text(customLabel, style = MaterialTheme.typography.labelMedium) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer

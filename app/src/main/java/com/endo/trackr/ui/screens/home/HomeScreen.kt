@@ -1,6 +1,10 @@
 package com.endo.trackr.ui.screens.home
 
 import android.Manifest
+import android.app.Activity
+import androidx.compose.ui.res.stringResource
+import com.endo.trackr.R
+import com.endo.trackr.core.util.LanguageManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -58,6 +62,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Event
+import com.endo.trackr.ui.components.DateFilterDialog
+import com.endo.trackr.core.util.DateFilterType
+import com.endo.trackr.core.util.HistoryDateFilter
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -146,8 +155,15 @@ fun HomeScreen(
     }
 
     // Pengelompokan sesi tersimpan berdasarkan kategori tanggal (Hari Ini, Kemarin, dll.)
-    val groupedSessions = remember(uiState.sessions) {
-        uiState.sessions.groupBy { DateTimeUtils.getDateCategory(it.startTime) }
+    val displayedSessions = remember(uiState.sessions, uiState.filteredSessions, uiState.historyDateFilter) {
+        if (uiState.historyDateFilter.type == DateFilterType.ALL_TIME) {
+            uiState.sessions
+        } else {
+            uiState.filteredSessions
+        }
+    }
+    val groupedSessions = remember(displayedSessions) {
+        displayedSessions.groupBy { DateTimeUtils.getDateCategory(it.startTime, context) }
     }
 
     // Konfigurasi Izin Runtime (Location & Notification untuk Android 13+)
@@ -206,7 +222,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Lightweight GPS Logger & Timeline",
+                            text = stringResource(R.string.app_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -218,7 +234,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Pengaturan Bahan Bakar"
+                            contentDescription = stringResource(R.string.btn_settings)
                         )
                     }
                     IconButton(
@@ -232,7 +248,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.FileDownload,
-                            contentDescription = "Ekspor Riwayat Jejak"
+                            contentDescription = stringResource(R.string.btn_export)
                         )
                     }
                 },
@@ -266,7 +282,7 @@ fun HomeScreen(
                     Tab(
                         selected = selectedTabIndex == 0,
                         onClick = { selectedTabIndex = 0 },
-                        text = { Text("Peta & Pelacak") },
+                        text = { Text(stringResource(R.string.tab_map_tracker)) },
                         icon = { Icon(Icons.Default.Map, contentDescription = null) }
                     )
                     Tab(
@@ -281,7 +297,7 @@ fun HomeScreen(
                     Tab(
                         selected = selectedTabIndex == 2,
                         onClick = { selectedTabIndex = 2 },
-                        text = { Text("Statistik & Heatmap") },
+                        text = { Text(stringResource(R.string.tab_stats_heatmap)) },
                         icon = { Icon(Icons.Default.QueryStats, contentDescription = null) }
                     )
                 }
@@ -321,14 +337,14 @@ fun HomeScreen(
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = "Pencegahan Sleep / Kill Background",
+                                                    text = stringResource(R.string.battery_banner_title),
                                                     style = MaterialTheme.typography.labelMedium,
                                                     fontWeight = FontWeight.Bold,
                                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                                 )
                                                 Spacer(modifier = Modifier.height(2.dp))
                                                 Text(
-                                                    text = "Agar perekaman rute di latar belakang tidak dimatikan paksa oleh sistem (terutama di HP OPPO/ColorOS), izinkan TrackR mengabaikan optimasi baterai.",
+                                                    text = stringResource(R.string.battery_banner_desc),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                                 )
@@ -376,7 +392,7 @@ fun HomeScreen(
                                                     modifier = Modifier.height(32.dp),
                                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                                                 ) {
-                                                    Text("Atur Izin Baterai", style = MaterialTheme.typography.labelSmall)
+                                                    Text(stringResource(R.string.btn_configure_battery), style = MaterialTheme.typography.labelSmall)
                                                 }
                                             }
                                             IconButton(
@@ -385,7 +401,7 @@ fun HomeScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Close,
-                                                    contentDescription = "Tutup Peringatan",
+                                                    contentDescription = stringResource(R.string.btn_close_alert),
                                                     tint = MaterialTheme.colorScheme.onTertiaryContainer,
                                                     modifier = Modifier.size(16.dp)
                                                 )
@@ -440,27 +456,71 @@ fun HomeScreen(
                         }
 
                         item {
-                            Text(
-                                text = "Riwayat Sesi Tersimpan (${uiState.sessions.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.history_saved_sessions, displayedSessions.size),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+
+                                FilterChip(
+                                    selected = uiState.historyDateFilter.type != DateFilterType.ALL_TIME,
+                                    onClick = { viewModel.openDateFilterDialog() },
+                                    label = {
+                                        Text(
+                                            if (uiState.historyDateFilter.type == DateFilterType.ALL_TIME) {
+                                                stringResource(R.string.filter_all_sessions)
+                                            } else {
+                                                uiState.historyDateFilter.getDisplayLabel(context)
+                                            },
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Event, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
                         }
 
-                        if (uiState.sessions.isEmpty()) {
+                        if (displayedSessions.isEmpty()) {
                             item {
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow
                                 ) {
-                                    Text(
-                                        text = "Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute.",
-                                        modifier = Modifier.padding(20.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = if (uiState.historyDateFilter.type != DateFilterType.ALL_TIME) {
+                                                stringResource(R.string.history_filter_empty)
+                                            } else {
+                                                stringResource(R.string.history_empty)
+                                            },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        if (uiState.historyDateFilter.type != DateFilterType.ALL_TIME) {
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            OutlinedButton(
+                                                onClick = { viewModel.setDateFilter(HistoryDateFilter()) },
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(stringResource(R.string.btn_reset_filter), style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -546,13 +606,13 @@ fun HomeScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
-                                            text = "Belum Ada Segmen Timeline",
+                                            text = stringResource(R.string.timeline_empty_title),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = "Mulai pelacakan atau tekan tombol 'Simulasi Demo' di atas untuk melihat bagaimana ratusan titik GPS dikelompokkan dan diterjemahkan menjadi nama jalan/tempat.",
+                                            text = stringResource(R.string.timeline_empty_desc),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.outline
                                         )
@@ -614,20 +674,22 @@ fun HomeScreen(
                                         .padding(16.dp)
                                 ) {
                                     Text(
-                                        text = "Analitik Jarak & Heatmap",
+                                        text = stringResource(R.string.stats_header_title),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Kalkulasi jarak tempuh matematis rumus Haversine dan visualisasi lapisan kepadatan panas spasial dari rekaman sensor GPS.",
+                                        text = stringResource(R.string.stats_header_desc),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
                                     TimeRangeSelector(
                                         selectedRange = uiState.selectedStatsRange,
-                                        onRangeSelected = { viewModel.setSelectedStatsRange(it) }
+                                        onRangeSelected = { viewModel.setSelectedStatsRange(it) },
+                                        currentFilter = uiState.historyDateFilter,
+                                        onOpenCustomFilterDialog = { viewModel.openDateFilterDialog() }
                                     )
                                 }
                             }
@@ -676,12 +738,12 @@ fun HomeScreen(
                                     )
                                     Column {
                                         Text(
-                                            text = "Lapisan Heatmap Dinamis",
+                                            text = stringResource(R.string.heatmap_banner_title),
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Ketuk tombol api di pojok kanan bawah peta untuk beralih antara lapisan kepadatan gradien panas (Heatmap) dan garis rute perjalanan (Polyline).",
+                                            text = stringResource(R.string.heatmap_banner_desc),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -730,12 +792,19 @@ fun HomeScreen(
         )
     }
 
-    // Dialog Pengaturan Bahan Bakar & Kendaraan
+    // Dialog Pengaturan Aplikasi (Bahasa & Bahan Bakar)
+    val activity = context as? Activity
     FuelSettingsDialog(
         isVisible = uiState.isFuelSettingsOpen,
+        currentLanguage = LanguageManager.getSavedLanguage(context),
         profiles = uiState.fuelProfiles,
         selectedProfileId = uiState.selectedFuelProfile?.id,
         idleRate = uiState.idleConsumptionRate,
+        onLanguageSelected = { newLang ->
+            if (activity != null) {
+                LanguageManager.setLanguage(activity, newLang)
+            }
+        },
         onSelectProfile = { viewModel.selectFuelProfile(it) },
         onEditProfile = { viewModel.openFuelForm(it) },
         onDeleteProfile = { viewModel.deleteFuelProfile(it) },
@@ -752,6 +821,14 @@ fun HomeScreen(
             viewModel.saveFuelProfile(name, price, efficiency, id)
         },
         onDismiss = { viewModel.closeFuelForm() }
+    )
+
+    // Dialog Filter Tanggal Riwayat & Statistik (Single Date, Date Range, Month & Year)
+    DateFilterDialog(
+        isVisible = uiState.isDateFilterDialogOpen,
+        currentFilter = uiState.historyDateFilter,
+        onFilterSelected = { viewModel.setDateFilter(it) },
+        onDismiss = { viewModel.closeDateFilterDialog() }
     )
 }
 
@@ -835,7 +912,7 @@ private fun TimelineHeaderCard(
                 ) {
                     Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ekspor Jejak GIS (GPX / KML / GeoJSON)")
+                    Text(stringResource(R.string.btn_export_session))
                 }
             }
         }
@@ -880,9 +957,9 @@ private fun TrackingControlCard(
             ) {
                 Text(
                     text = if (isServiceRunning) {
-                        activeSession?.title ?: "Pelacakan Aktif"
+                        activeSession?.title ?: stringResource(R.string.tracker_active)
                     } else {
-                        "Pelacak Lokasi Siap"
+                        stringResource(R.string.tracker_ready)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -894,7 +971,7 @@ private fun TrackingControlCard(
                 )
 
                 if (isServiceRunning) {
-                    val statusText = if (isServicePaused) "DIJEDA" else "MEREKAM"
+                    val statusText = if (isServicePaused) stringResource(R.string.status_paused_short) else stringResource(R.string.status_recording_short)
                     val statusColor = if (isServicePaused) Color(0xFFF57C00) else Color(0xFF2E7D32)
                     Box(
                         modifier = Modifier
@@ -924,7 +1001,7 @@ private fun TrackingControlCard(
                     val isMoving = motionState == MotionState.MOVING
                     val badgeColor = if (isMoving) Color(0xFF1B5E20) else Color(0xFF0D47A1)
                     val badgeIcon = if (isMoving) Icons.AutoMirrored.Filled.DirectionsWalk else Icons.Default.BatterySaver
-                    val badgeText = if (isMoving) "BERGERAK (Polling 5s)" else "DIAM / IDLE (Polling 60s)"
+                    val badgeText = if (isMoving) stringResource(R.string.badge_moving) else stringResource(R.string.badge_idle)
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -1009,13 +1086,13 @@ private fun TrackingControlCard(
                         val speedKmh = ((latestPoint?.speed ?: 0f) * 3.6f)
                         MetricItem(
                             icon = Icons.Default.Speed,
-                            label = "Kecepatan",
+                            label = stringResource(R.string.metric_speed),
                             value = String.format(java.util.Locale.getDefault(), "%.1f km/h", speedKmh),
                             modifier = Modifier.weight(1f)
                         )
                         MetricItem(
                             icon = Icons.Default.Timer,
-                            label = "Akurasi GPS",
+                            label = stringResource(R.string.metric_gps_accuracy),
                             value = String.format(java.util.Locale.getDefault(), "±%.1f m", latestPoint?.accuracy ?: 0f),
                             modifier = Modifier.weight(1f)
                         )
@@ -1041,7 +1118,7 @@ private fun TrackingControlCard(
             // Tombol Aksi Kontrol
             if (!isServiceRunning) {
                 Text(
-                    text = "Tekan tombol di bawah untuk menyalakan Foreground Service dan mencatat jejak rute di atas peta.",
+                    text = stringResource(R.string.tracker_prompt),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1052,7 +1129,7 @@ private fun TrackingControlCard(
                 ) {
                     Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Mulai Pelacakan GPS")
+                    Text(stringResource(R.string.btn_start_tracking_gps))
                 }
             } else {
                 Row(
@@ -1066,7 +1143,7 @@ private fun TrackingControlCard(
                         ) {
                             Icon(imageVector = Icons.Default.Pause, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Jeda")
+                            Text(stringResource(R.string.btn_pause_tracking))
                         }
                     } else {
                         Button(
@@ -1075,7 +1152,7 @@ private fun TrackingControlCard(
                         ) {
                             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Lanjutkan")
+                            Text(stringResource(R.string.btn_resume_tracking))
                         }
                     }
 
@@ -1088,7 +1165,7 @@ private fun TrackingControlCard(
                     ) {
                         Icon(imageVector = Icons.Default.Stop, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Selesai")
+                        Text(stringResource(R.string.btn_stop_tracking))
                     }
                 }
             }
@@ -1161,8 +1238,15 @@ private fun SessionHistoryCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val sessionPrefix = stringResource(R.string.session_title_prefix)
+                    val sessionTitle = session.title?.let { t ->
+                        if (t.startsWith("Jejak ")) t.replaceFirst("Jejak ", "$sessionPrefix ")
+                        else if (t.startsWith("Track ")) t.replaceFirst("Track ", "$sessionPrefix ")
+                        else t
+                    } ?: stringResource(R.string.session_number_prefix, session.id)
+
                     Text(
-                        text = session.title ?: "Sesi #${session.id}",
+                        text = sessionTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -1178,7 +1262,12 @@ private fun SessionHistoryCard(
                 )
 
                 Text(
-                    text = "Total ${session.pointCount} titik • Jarak: ${LocationUtils.formatDistance(session.totalDistanceMeters)} • Durasi: ${DateTimeUtils.formatDuration(session.totalDurationSeconds)}",
+                    text = stringResource(
+                        R.string.history_summary_format,
+                        session.pointCount,
+                        LocationUtils.formatDistance(session.totalDistanceMeters),
+                        DateTimeUtils.formatDuration(session.totalDurationSeconds)
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1188,14 +1277,14 @@ private fun SessionHistoryCard(
                 IconButton(onClick = onExport) {
                     Icon(
                         imageVector = Icons.Default.FileDownload,
-                        contentDescription = "Ekspor Sesi Ini (GPX/KML/GeoJSON)",
+                        contentDescription = stringResource(R.string.btn_export_session),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Hapus Sesi",
+                        contentDescription = stringResource(R.string.btn_delete_session),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
