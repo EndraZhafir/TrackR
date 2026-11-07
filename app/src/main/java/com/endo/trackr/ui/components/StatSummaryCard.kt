@@ -1,6 +1,11 @@
 package com.endo.trackr.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalContext
+import com.endo.trackr.core.util.HistoryDateFilter
+import com.endo.trackr.core.util.DateFilterType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -319,16 +324,33 @@ fun StatsMetricsGrid(
  */
 @Composable
 fun TimeRangeSelector(
-    selectedRange: StatsTimeRange,
-    onRangeSelected: (StatsTimeRange) -> Unit,
+    selectedRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
+    onRangeSelected: (StatsTimeRange) -> Unit = {},
+    currentFilter: HistoryDateFilter? = null,
+    onOpenCustomFilterDialog: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         StatsTimeRange.entries.forEach { range ->
-            val isSelected = range == selectedRange
+            val isSelected = if (currentFilter != null) {
+                !currentFilter.isCustom && when (range) {
+                    StatsTimeRange.TODAY -> currentFilter.type == DateFilterType.TODAY
+                    StatsTimeRange.WEEK -> currentFilter.type == DateFilterType.WEEK
+                    StatsTimeRange.MONTH -> currentFilter.type == DateFilterType.MONTH
+                    StatsTimeRange.ALL_TIME -> currentFilter.type == DateFilterType.ALL_TIME
+                }
+            } else {
+                range == selectedRange
+            }
+
             val rangeLabel = when (range) {
                 StatsTimeRange.TODAY -> stringResource(R.string.stats_range_today)
                 StatsTimeRange.WEEK -> stringResource(R.string.stats_range_week)
@@ -339,6 +361,27 @@ fun TimeRangeSelector(
                 selected = isSelected,
                 onClick = { onRangeSelected(range) },
                 label = { Text(rangeLabel, style = MaterialTheme.typography.labelMedium) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        // Chip Filter Kustom (Single Date, Date Range, atau Month & Year)
+        if (onOpenCustomFilterDialog != null) {
+            val isCustomActive = currentFilter?.isCustom == true
+            val customLabel = if (isCustomActive) {
+                currentFilter.getDisplayLabel(context)
+            } else {
+                stringResource(R.string.filter_custom_date)
+            }
+
+            FilterChip(
+                selected = isCustomActive,
+                onClick = onOpenCustomFilterDialog,
+                label = { Text(customLabel, style = MaterialTheme.typography.labelMedium) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer

@@ -62,6 +62,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Event
+import com.endo.trackr.ui.components.DateFilterDialog
+import com.endo.trackr.core.util.DateFilterType
+import com.endo.trackr.core.util.HistoryDateFilter
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -150,8 +155,15 @@ fun HomeScreen(
     }
 
     // Pengelompokan sesi tersimpan berdasarkan kategori tanggal (Hari Ini, Kemarin, dll.)
-    val groupedSessions = remember(uiState.sessions) {
-        uiState.sessions.groupBy { DateTimeUtils.getDateCategory(it.startTime, context) }
+    val displayedSessions = remember(uiState.sessions, uiState.filteredSessions, uiState.historyDateFilter) {
+        if (uiState.historyDateFilter.type == DateFilterType.ALL_TIME) {
+            uiState.sessions
+        } else {
+            uiState.filteredSessions
+        }
+    }
+    val groupedSessions = remember(displayedSessions) {
+        displayedSessions.groupBy { DateTimeUtils.getDateCategory(it.startTime, context) }
     }
 
     // Konfigurasi Izin Runtime (Location & Notification untuk Android 13+)
@@ -444,27 +456,71 @@ fun HomeScreen(
                         }
 
                         item {
-                            Text(
-                                text = "Riwayat Sesi Tersimpan (${uiState.sessions.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.history_saved_sessions, displayedSessions.size),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+
+                                FilterChip(
+                                    selected = uiState.historyDateFilter.type != DateFilterType.ALL_TIME,
+                                    onClick = { viewModel.openDateFilterDialog() },
+                                    label = {
+                                        Text(
+                                            if (uiState.historyDateFilter.type == DateFilterType.ALL_TIME) {
+                                                stringResource(R.string.filter_all_sessions)
+                                            } else {
+                                                uiState.historyDateFilter.getDisplayLabel(context)
+                                            },
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Event, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
                         }
 
-                        if (uiState.sessions.isEmpty()) {
+                        if (displayedSessions.isEmpty()) {
                             item {
                                 Surface(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
                                     color = MaterialTheme.colorScheme.surfaceContainerLow
                                 ) {
-                                    Text(
-                                        text = stringResource(R.string.history_empty),
-                                        modifier = Modifier.padding(20.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(20.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = if (uiState.historyDateFilter.type != DateFilterType.ALL_TIME) {
+                                                stringResource(R.string.history_filter_empty)
+                                            } else {
+                                                stringResource(R.string.history_empty)
+                                            },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                        if (uiState.historyDateFilter.type != DateFilterType.ALL_TIME) {
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            OutlinedButton(
+                                                onClick = { viewModel.setDateFilter(HistoryDateFilter()) },
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(stringResource(R.string.btn_reset_filter), style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -631,7 +687,9 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     TimeRangeSelector(
                                         selectedRange = uiState.selectedStatsRange,
-                                        onRangeSelected = { viewModel.setSelectedStatsRange(it) }
+                                        onRangeSelected = { viewModel.setSelectedStatsRange(it) },
+                                        currentFilter = uiState.historyDateFilter,
+                                        onOpenCustomFilterDialog = { viewModel.openDateFilterDialog() }
                                     )
                                 }
                             }
@@ -764,6 +822,14 @@ fun HomeScreen(
         },
         onDismiss = { viewModel.closeFuelForm() }
     )
+
+    // Dialog Filter Tanggal Riwayat & Statistik (Single Date, Date Range, Month & Year)
+    DateFilterDialog(
+        isVisible = uiState.isDateFilterDialogOpen,
+        currentFilter = uiState.historyDateFilter,
+        onFilterSelected = { viewModel.setDateFilter(it) },
+        onDismiss = { viewModel.closeDateFilterDialog() }
+    )
 }
 
 @Composable
@@ -846,7 +912,7 @@ private fun TimelineHeaderCard(
                 ) {
                     Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Ekspor Jejak GIS (GPX / KML / GeoJSON)")
+                    Text(stringResource(R.string.btn_export_session))
                 }
             }
         }
@@ -1172,8 +1238,15 @@ private fun SessionHistoryCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    val sessionPrefix = stringResource(R.string.session_title_prefix)
+                    val sessionTitle = session.title?.let { t ->
+                        if (t.startsWith("Jejak ")) t.replaceFirst("Jejak ", "$sessionPrefix ")
+                        else if (t.startsWith("Track ")) t.replaceFirst("Track ", "$sessionPrefix ")
+                        else t
+                    } ?: stringResource(R.string.session_number_prefix, session.id)
+
                     Text(
-                        text = session.title ?: "Sesi #${session.id}",
+                        text = sessionTitle,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -1189,7 +1262,12 @@ private fun SessionHistoryCard(
                 )
 
                 Text(
-                    text = "Total ${session.pointCount} titik • Jarak: ${LocationUtils.formatDistance(session.totalDistanceMeters)} • Durasi: ${DateTimeUtils.formatDuration(session.totalDurationSeconds)}",
+                    text = stringResource(
+                        R.string.history_summary_format,
+                        session.pointCount,
+                        LocationUtils.formatDistance(session.totalDistanceMeters),
+                        DateTimeUtils.formatDuration(session.totalDurationSeconds)
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1199,14 +1277,14 @@ private fun SessionHistoryCard(
                 IconButton(onClick = onExport) {
                     Icon(
                         imageVector = Icons.Default.FileDownload,
-                        contentDescription = "Ekspor Sesi Ini (GPX/KML/GeoJSON)",
+                        contentDescription = stringResource(R.string.btn_export_session),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Hapus Sesi",
+                        contentDescription = stringResource(R.string.btn_delete_session),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }

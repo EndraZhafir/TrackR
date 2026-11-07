@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.endo.trackr.core.util.DateTimeUtils
 import com.endo.trackr.core.util.LocationUtils
+import com.endo.trackr.core.util.DateFilterType
+import com.endo.trackr.core.util.HistoryDateFilter
 import com.endo.trackr.core.util.StatsCalculator
 import com.endo.trackr.core.util.StatsTimeRange
 import com.endo.trackr.core.util.StayPointDetector
@@ -67,6 +69,9 @@ data class HomeUiState(
     val isBatchGeocoding: Boolean = false,
     val exportDialogState: ExportDialogState = ExportDialogState(),
     val selectedStatsRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
+    val historyDateFilter: HistoryDateFilter = HistoryDateFilter(DateFilterType.ALL_TIME),
+    val filteredSessions: List<TrackingSessionEntity> = emptyList(),
+    val isDateFilterDialogOpen: Boolean = false,
     val statsSummary: TravelStatsSummary = TravelStatsSummary(),
     val statsPoints: List<LocationPointEntity> = emptyList(),
     val statsStayPoints: List<StayPointEntity> = emptyList(),
@@ -118,7 +123,26 @@ class HomeViewModel(
     private val _isBatchGeocoding = MutableStateFlow(false)
     private val _exportDialogState = MutableStateFlow(ExportDialogState())
     private val _selectedStatsRange = MutableStateFlow(StatsTimeRange.ALL_TIME)
+    private val _historyDateFilter = MutableStateFlow(HistoryDateFilter(DateFilterType.ALL_TIME))
+    private val _isDateFilterDialogOpen = MutableStateFlow(false)
     private val _showStatsHeatmap = MutableStateFlow(true)
+
+    private val statsFilterFlow = combine(
+        _selectedStatsRange,
+        _historyDateFilter,
+        _isDateFilterDialogOpen,
+        _showStatsHeatmap
+    ) { statsRange, filter, isDialogOpen, showHeatmap ->
+        StatsFilterBundle(statsRange, filter, isDialogOpen, showHeatmap)
+    }
+
+    private val statsBundleFlow = combine(
+        allValidPointsFlow,
+        allStayPointsFlow,
+        statsFilterFlow
+    ) { allValid, allStay, filterBundle ->
+        Triple(allValid, allStay, filterBundle)
+    }
 
     private val _isFuelSettingsOpen = MutableStateFlow(false)
     private val _isFuelFormOpen = MutableStateFlow(false)
@@ -150,19 +174,18 @@ class HomeViewModel(
         combine(_resolvingStayPointIds, _isBatchGeocoding, _exportDialogState) { resolvingIds, isBatch, exportState ->
             Triple(resolvingIds, isBatch, exportState)
         },
-        combine(allValidPointsFlow, allStayPointsFlow, _selectedStatsRange, _showStatsHeatmap) { allValid, allStay, statsRange, showHeatmap ->
-            Quad(allValid, allStay, statsRange, showHeatmap)
-        },
+        statsBundleFlow,
         fuelFlow
-    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState), (allValid, allStay, statsRange, showHeatmap), fuelBundle ->
+    ) { (activeSession, sessions, activePoints, stayPoints), (isRunning, isPaused, motionState, jitterCount), (resolvingIds, isBatch, exportState), (allValid, allStay, filterBundle), fuelBundle ->
         val segments = StayPointDetector.buildTimelineSegments(activePoints, stayPoints)
 
-        val statsThreshold = StatsCalculator.getStartTimestampForRange(statsRange)
-        val filteredStatsPoints = allValid.filter { it.timestamp >= statsThreshold }
-        val filteredStatsStayPoints = allStay.filter { it.arrivalTime >= statsThreshold }
+        val (startMillis, endMillis) = filterBundle.filter.getTimeBounds()
+        val filteredStatsPoints = allValid.filter { it.timestamp in startMillis..endMillis }
+        val filteredStatsStayPoints = allStay.filter { it.arrivalTime in startMillis..endMillis }
+        val filteredSessions = sessions.filter { it.startTime in startMillis..endMillis }
 
         val statsSummary = StatsCalculator.calculate(
-            range = statsRange,
+            filter = filterBundle.filter,
             sessions = sessions,
             points = allValid,
             stayPoints = allStay,
@@ -173,6 +196,7 @@ class HomeViewModel(
         HomeUiState(
             activeSession = activeSession,
             sessions = sessions,
+            filteredSessions = filteredSessions,
             activePoints = activePoints,
             stayPoints = stayPoints,
             timelineSegments = segments,
@@ -185,11 +209,13 @@ class HomeViewModel(
             resolvingStayPointIds = resolvingIds,
             isBatchGeocoding = isBatch,
             exportDialogState = exportState,
-            selectedStatsRange = statsRange,
+            selectedStatsRange = filterBundle.range,
+            historyDateFilter = filterBundle.filter,
+            isDateFilterDialogOpen = filterBundle.isDialogOpen,
             statsSummary = statsSummary,
             statsPoints = filteredStatsPoints,
             statsStayPoints = filteredStatsStayPoints,
-            showStatsHeatmap = showHeatmap,
+            showStatsHeatmap = filterBundle.showHeatmap,
             fuelProfiles = fuelBundle.profiles,
             selectedFuelProfile = fuelBundle.selectedProfile,
             idleConsumptionRate = fuelBundle.idleRate,
@@ -434,6 +460,31 @@ class HomeViewModel(
 
     fun setSelectedStatsRange(range: StatsTimeRange) {
         _selectedStatsRange.value = range
+        _historyDateFilter.value = when (range) {
+            StatsTimeRange.TODAY -> HistoryDateFilter(DateFilterType.TODAY)
+            StatsTimeRange.WEEK -> HistoryDateFilter(DateFilterType.WEEK)
+            StatsTimeRange.MONTH -> HistoryDateFilter(DateFilterType.MONTH)
+            StatsTimeRange.ALL_TIME -> HistoryDateFilter(DateFilterType.ALL_TIME)
+        }
+    }
+
+    fun setDateFilter(filter: HistoryDateFilter) {
+        _historyDateFilter.value = filter
+        _selectedStatsRange.value = when (filter.type) {
+            DateFilterType.TODAY -> StatsTimeRange.TODAY
+            DateFilterType.WEEK -> StatsTimeRange.WEEK
+            DateFilterType.MONTH -> StatsTimeRange.MONTH
+            DateFilterType.ALL_TIME -> StatsTimeRange.ALL_TIME
+            else -> StatsTimeRange.ALL_TIME
+        }
+    }
+
+    fun openDateFilterDialog() {
+        _isDateFilterDialogOpen.value = true
+    }
+
+    fun closeDateFilterDialog() {
+        _isDateFilterDialogOpen.value = false
     }
 
     fun toggleStatsHeatmap() {
@@ -613,4 +664,11 @@ private data class Quintuple<A, B, C, D, E>(
     val third: C,
     val fourth: D,
     val fifth: E
+)
+
+private data class StatsFilterBundle(
+    val range: StatsTimeRange,
+    val filter: HistoryDateFilter,
+    val isDialogOpen: Boolean,
+    val showHeatmap: Boolean
 )

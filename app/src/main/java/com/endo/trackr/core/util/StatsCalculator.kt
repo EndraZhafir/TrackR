@@ -8,7 +8,7 @@ import com.endo.trackr.data.repository.DefaultFuelPreferencesRepository
 import java.util.Calendar
 
 /**
- * Pilihan rentang waktu untuk agregasi data analitik statistik perjalanan.
+ * Pilihan rentang waktu cepat untuk agregasi data analitik statistik perjalanan.
  */
 enum class StatsTimeRange(val displayName: String) {
     TODAY("Hari Ini"),
@@ -23,6 +23,7 @@ enum class StatsTimeRange(val displayName: String) {
  */
 data class TravelStatsSummary(
     val timeRange: StatsTimeRange = StatsTimeRange.ALL_TIME,
+    val dateFilter: HistoryDateFilter = HistoryDateFilter(),
     val totalDistanceMeters: Double = 0.0,
     val totalDurationSeconds: Long = 0L,
     val averageSpeedKmh: Float = 0f,
@@ -67,11 +68,11 @@ object StatsCalculator {
     }
 
     /**
-     * Mengagregasi metrik jarak Haversine, durasi, kecepatan, titik singgah,
-     * serta konsumsi dan estimasi biaya bahan bakar (jika profil aktif tersedia).
+     * Mengagregasi metrik analitik perjalanan menggunakan [HistoryDateFilter] yang robust
+     * (mendukung tanggal spesifik, rentang tanggal kustom, serta bulan & tahun).
      */
     fun calculate(
-        range: StatsTimeRange,
+        filter: HistoryDateFilter,
         sessions: List<TrackingSessionEntity>,
         points: List<LocationPointEntity>,
         stayPoints: List<StayPointEntity>,
@@ -79,11 +80,11 @@ object StatsCalculator {
         idleRateLitersPerHour: Double = DefaultFuelPreferencesRepository.DEFAULT_IDLE_RATE_LITERS_PER_HOUR,
         now: Long = System.currentTimeMillis()
     ): TravelStatsSummary {
-        val startThreshold = getStartTimestampForRange(range, now)
+        val (startThreshold, endThreshold) = filter.getTimeBounds(now)
 
-        val filteredSessions = sessions.filter { it.startTime >= startThreshold }
-        val filteredPoints = points.filter { it.timestamp >= startThreshold && !it.isJitter }
-        val filteredStayPoints = stayPoints.filter { it.arrivalTime >= startThreshold }
+        val filteredSessions = sessions.filter { it.startTime in startThreshold..endThreshold }
+        val filteredPoints = points.filter { it.timestamp in startThreshold..endThreshold && !it.isJitter }
+        val filteredStayPoints = stayPoints.filter { it.arrivalTime in startThreshold..endThreshold }
 
         // 1. Hitung Total Jarak (Haversine akumulatif per sesi perjalanan) & Akumulasi Idle Interval
         var totalDistanceMeters = 0.0
@@ -162,8 +163,17 @@ object StatsCalculator {
             Quad(null, null, null, null)
         }
 
+        val quickRange = when (filter.type) {
+            DateFilterType.TODAY -> StatsTimeRange.TODAY
+            DateFilterType.WEEK -> StatsTimeRange.WEEK
+            DateFilterType.MONTH -> StatsTimeRange.MONTH
+            DateFilterType.ALL_TIME -> StatsTimeRange.ALL_TIME
+            else -> StatsTimeRange.ALL_TIME
+        }
+
         return TravelStatsSummary(
-            timeRange = range,
+            timeRange = quickRange,
+            dateFilter = filter,
             totalDistanceMeters = totalDistanceMeters,
             totalDurationSeconds = totalDurationSeconds,
             averageSpeedKmh = averageSpeedKmh,
@@ -178,6 +188,35 @@ object StatsCalculator {
             idleFuelLiters = idleFuelLiters,
             totalFuelLiters = totalFuelLiters,
             totalFuelCost = totalFuelCost
+        )
+    }
+
+    /**
+     * Overload helper untuk kompatibilitas ke belakang dengan [StatsTimeRange].
+     */
+    fun calculate(
+        range: StatsTimeRange,
+        sessions: List<TrackingSessionEntity>,
+        points: List<LocationPointEntity>,
+        stayPoints: List<StayPointEntity>,
+        activeFuelProfile: FuelProfile? = null,
+        idleRateLitersPerHour: Double = DefaultFuelPreferencesRepository.DEFAULT_IDLE_RATE_LITERS_PER_HOUR,
+        now: Long = System.currentTimeMillis()
+    ): TravelStatsSummary {
+        val filterType = when (range) {
+            StatsTimeRange.TODAY -> DateFilterType.TODAY
+            StatsTimeRange.WEEK -> DateFilterType.WEEK
+            StatsTimeRange.MONTH -> DateFilterType.MONTH
+            StatsTimeRange.ALL_TIME -> DateFilterType.ALL_TIME
+        }
+        return calculate(
+            filter = HistoryDateFilter(type = filterType),
+            sessions = sessions,
+            points = points,
+            stayPoints = stayPoints,
+            activeFuelProfile = activeFuelProfile,
+            idleRateLitersPerHour = idleRateLitersPerHour,
+            now = now
         )
     }
 

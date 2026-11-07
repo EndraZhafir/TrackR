@@ -30,8 +30,9 @@
     <string name="btn_close_alert">Dismiss Alert</string>
 
     <!-- Session History -->
-    <string name="history_saved_sessions">Saved Session History (%d)</string>
+    <string name="history_saved_sessions">Saved Sessions (%d)</string>
     <string name="history_empty">No GPS route records saved yet. Tap Start Tracking to record a route.</string>
+    <string name="history_filter_empty">No session records found for the selected filter period.</string>
     <string name="history_summary_format">Total %1$d points • Distance: %2$s • Duration: %3$s</string>
     <string name="btn_export_session">Export GIS File</string>
     <string name="btn_delete_session">Delete Session</string>
@@ -135,4 +136,22 @@
     <string name="metric_gps_accuracy">GPS Accuracy</string>
     <string name="tracker_prompt">Tap the button below to start Foreground Service and record routes on the map.</string>
     <string name="btn_start_tracking_gps">Start GPS Tracking</string>
+    <!-- Heatmap Legend -->
+    <string name="heatmap_density_label">Density:</string>
+    <string name="heatmap_density_low">Low</string>
+    <string name="heatmap_density_medium">Medium</string>
+    <string name="heatmap_density_high">High</string>
+    <string name="session_title_prefix">Track</string>
+    <string name="session_number_prefix">Session #%d</string>
+    <string name="filter_custom_date">Custom</string>
+    <string name="filter_dialog_title">Filter History &amp; Stats</string>
+    <string name="filter_dialog_subtitle">Select specific date, date range, or month &amp; year</string>
+    <string name="filter_tab_single_date">Specific Date</string>
+    <string name="filter_tab_date_range">Date Range</string>
+    <string name="filter_tab_month_year">Month &amp; Year</string>
+    <string name="filter_year_label">Select Year:</string>
+    <string name="filter_month_label">Select Month:</string>
+    <string name="btn_apply_filter">Apply Filter</string>
+    <string name="btn_reset_filter">Reset Filter</string>
+    <string name="filter_all_sessions">All Sessions</string>
 </resources>

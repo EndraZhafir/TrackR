@@ -32,6 +32,7 @@
     <!-- Riwayat Sesi -->
     <string name="history_saved_sessions">Riwayat Sesi Tersimpan (%d)</string>
     <string name="history_empty">Belum ada rekaman rute GPS tersimpan. Klik Mulai Pelacakan untuk mencatat jejak rute.</string>
+    <string name="history_filter_empty">Tidak ada rekaman sesi pada periode filter yang dipilih.</string>
     <string name="history_summary_format">Total %1$d titik • Jarak: %2$s • Durasi: %3$s</string>
     <string name="btn_export_session">Ekspor Berkas GIS</string>
     <string name="btn_delete_session">Hapus Sesi</string>
@@ -135,4 +136,22 @@
     <string name="metric_gps_accuracy">Akurasi GPS</string>
     <string name="tracker_prompt">Tekan tombol di bawah untuk menyalakan Foreground Service dan mencatat jejak rute di atas peta.</string>
     <string name="btn_start_tracking_gps">Mulai Pelacakan GPS</string>
+    <!-- Heatmap Legend -->
+    <string name="heatmap_density_label">Kepadatan:</string>
+    <string name="heatmap_density_low">Rendah</string>
+    <string name="heatmap_density_medium">Sedang</string>
+    <string name="heatmap_density_high">Padat</string>
+    <string name="session_title_prefix">Jejak</string>
+    <string name="session_number_prefix">Sesi #%d</string>
+    <string name="filter_custom_date">Kustom 📅</string>
+    <string name="filter_dialog_title">Filter Riwayat &amp; Statistik</string>
+    <string name="filter_dialog_subtitle">Pilih tanggal, rentang tanggal, atau bulan &amp; tahun</string>
+    <string name="filter_tab_single_date">Tanggal Tertentu</string>
+    <string name="filter_tab_date_range">Rentang Tanggal</string>
+    <string name="filter_tab_month_year">Bulan &amp; Tahun</string>
+    <string name="filter_year_label">Pilih Tahun:</string>
+    <string name="filter_month_label">Pilih Bulan:</string>
+    <string name="btn_apply_filter">Terapkan Filter</string>
+    <string name="btn_reset_filter">Reset Filter</string>
+    <string name="filter_all_sessions">Semua Sesi</string>
 </resources>
